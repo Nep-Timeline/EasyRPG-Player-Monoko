@@ -16,7 +16,6 @@ Remember to switch to the `dev` branch, as many updates will be submitted there 
 ### Required
 
 - [liblcf] for RPG Maker data reading.
-- [crypto++] for multiplayer chat.
 - [libuv] for multiplayer networking.
 - SDL2 >= 2.0.5 for screen backend support.
 - Pixman for low level pixel manipulation.
@@ -99,7 +98,7 @@ For multiplayer licensing, see [EPMP-LICENSE.txt]
 
 EasyRPG Player makes use of the following 3rd party software:
 
-* [strfnd.h] Minetest string utils - Copyright (C) 2013 celeron55,
+* [minetest util] Minetest C/C++ code - Copyright (C) 2010 celeron55,
   Perttu Ahola \<celeron55@gmail.com\>, provided under the LGPLv2.1+
 * [socks5.h] Modern C++ SOCKS5 Client Handler - by harsath, provided under MIT
 * [FMMidi] YM2608 FM synthesizer emulator - Copyright (c) 2003-2006 yuno
@@ -125,8 +124,7 @@ EasyRPG Player makes use of the following 3rd party software:
 
 [Tutorial]: docs/EPMP-TUTORIAL.md
 [liblcf]: https://github.com/EasyRPG/liblcf
-[strfnd.h]: https://github.com/minetest/minetest
-[crypto++]: https://www.cryptopp.com/wiki/Main_Page
+[minetest util]: https://github.com/minetest/minetest
 [socks5.h]: https://github.com/harsath/SOCKS5-Proxy-Handler
 [libuv]: https://github.com/libuv/libuv
 [BUILDING document]: docs/BUILDING.md
