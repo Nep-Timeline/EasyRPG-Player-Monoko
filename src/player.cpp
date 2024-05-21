@@ -130,6 +130,7 @@ namespace Player {
 	std::string rtp_path;
 	bool no_audio_flag;
 	bool is_easyrpg_project;
+	bool is_paused;
 	std::string encoding;
 	std::string escape_symbol;
 	uint32_t escape_char;
@@ -310,6 +311,7 @@ void Player::Pause() {
 #if PAUSE_AUDIO_WHEN_FOCUS_LOST
 	Audio().BGM_Pause();
 #endif
+	is_paused = true;
 }
 
 void Player::Resume() {
@@ -318,6 +320,7 @@ void Player::Resume() {
 	Audio().BGM_Resume();
 #endif
 	Game_Clock::ResetFrame(Game_Clock::now());
+	is_paused = false;
 }
 
 void Player::UpdateInput() {
