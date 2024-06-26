@@ -142,7 +142,6 @@ void Game_Map::Quit() {
 	Dispose();
 	common_events.clear();
 	interpreter.reset();
-	Output::Debug("MP: map quit");
 	GMI().MapQuit();
 }
 
@@ -216,9 +215,7 @@ void Game_Map::Setup(std::unique_ptr<lcf::rpg::Map> map_in) {
 	// events will properly resume upon loading.
 	Main_Data::game_player->UpdateSaveCounts(lcf::Data::system.save_count, GetMapSaveCount());
 
-	//multiplayer setup
-	Output::Debug("MP: map setup id={}", GetMapId());
-	GMI().SwitchRoom(GetMapId(), true);
+	GMI().SwitchRoom(GetMapId());
 }
 
 void Game_Map::SetupFromSave(
@@ -293,9 +290,7 @@ void Game_Map::SetupFromSave(
 	// cause panorama chunks to be out of sync.
 	Game_Map::Parallax::ChangeBG(GetParallaxParams());
 
-	//multiplayer setup
-	Output::Debug("MP: map setup from save id={}", GetMapId());
-	GMI().SwitchRoom(GetMapId());
+	GMI().SwitchRoom(GetMapId(), true);
 }
 
 std::unique_ptr<lcf::rpg::Map> Game_Map::loadMapFile(int map_id) {

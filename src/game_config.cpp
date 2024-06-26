@@ -355,6 +355,10 @@ void Game_Config::LoadFromArgs(CmdlineParser& cp) {
 			multiplayer.no_heartbeats.Set(true);
 			continue;
 		}
+		if (cp.ParseNext(arg, 0, "--no-pause-when-focus-lost")) {
+			video.no_pause_when_focus_lost.Set(true);
+			continue;
+		}
 
 		cp.SkipNext();
 	}
@@ -457,6 +461,7 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
 	multiplayer.client_auto_connect.FromIni(ini);
 	multiplayer.client_remote_address.FromIni(ini);
 	multiplayer.client_socks5_address.FromIni(ini);
+	multiplayer.client_chat_notifications.FromIni(ini);
 	multiplayer.client_chat_immersive_mode.FromIni(ini);
 	multiplayer.client_chat_splitscreen_mode.FromIni(ini);
 	multiplayer.client_chat_visibility.FromIni(ini);
@@ -554,6 +559,7 @@ void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
 	multiplayer.client_auto_connect.ToIni(os);
 	multiplayer.client_remote_address.ToIni(os);
 	multiplayer.client_socks5_address.ToIni(os);
+	multiplayer.client_chat_notifications.ToIni(os);
 	multiplayer.client_chat_immersive_mode.ToIni(os);
 	multiplayer.client_chat_splitscreen_mode.ToIni(os);
 	multiplayer.client_chat_visibility.ToIni(os);
