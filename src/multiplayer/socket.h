@@ -92,6 +92,10 @@ public:
 		return &stream;
 	}
 
+	void AsyncKeepAlive(std::unique_ptr<Socket>& socket) {
+		async_data.socket_alt_ptr = std::move(socket);
+	}
+
 	void SetReadTimeout(uint16_t _read_timeout_ms) {
 		read_timeout_ms = _read_timeout_ms;
 	}
@@ -111,6 +115,8 @@ private:
 
 	struct AsyncData {
 		Socket* socket;
+		// Only to prevent the pointer from being deleted
+		std::unique_ptr<Socket> socket_alt_ptr;
 	} async_data;
 	uv_async_t async;
 
