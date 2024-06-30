@@ -622,6 +622,7 @@ void Game_Multiplayer::SendChatMessage(int visibility, std::string message, int 
 }
 
 void Game_Multiplayer::SendBasicData() {
+	connection->SendPacketAsync<RoomPacket>(room_id);
 	auto& player = Main_Data::game_player;
 	auto cfg_it = virtual_3d_map_configs.find(room_id);
 	if (cfg_it != virtual_3d_map_configs.end() && cfg_it->second.character_event_id != -1) {
@@ -639,7 +640,6 @@ void Game_Multiplayer::SendBasicData() {
 	connection->SendPacketAsync<HiddenPacket>(player->IsSpriteHidden());
 	auto sysn = Main_Data::game_system->GetSystemName();
 	connection->SendPacketAsync<SystemPacket>(ToString(sysn));
-	connection->SendPacketAsync<RoomPacket>(room_id);
 }
 
 void Game_Multiplayer::MainPlayerMoved(int dir) {
