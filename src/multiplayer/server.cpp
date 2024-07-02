@@ -23,6 +23,10 @@
 #include "output_mt.h"
 #include "util/strfnd.h"
 
+#ifndef _WIN32
+#  include <csignal>
+#endif
+
 #ifdef SERVER
 #  include <csignal>
 #  include <getopt.h>
@@ -39,7 +43,6 @@ class ServerConnection : public Connection {
 	std::unique_ptr<Socket> socket;
 
 	void HandleData(std::string_view data) {
-		Print("Server Received: ", data);
 		Dispatch(data);
 		DispatchSystem(SystemMessage::EOD);
 	}
@@ -76,7 +79,6 @@ public:
 
 	void Send(std::string_view data) override {
 		socket->Send(data); // send back to oneself
-		Print("Server Sent: ", data);
 	}
 };
 
@@ -441,8 +443,8 @@ struct ServerMain::DataToSend {
 };
 
 void ServerMain::ForEachClient(const std::function<void(ServerSideClient&)>& callback) {
-	if (!running) return;
 	std::lock_guard lock(m_mutex);
+	if (!running) return;
 	for (const auto& it : clients) {
 		callback(*it.second);
 	}
@@ -456,14 +458,11 @@ void ServerMain::DeleteClient(const int id) {
 void ServerMain::SendTo(const int from_id, const int to_id,
 		const VisibilityType visibility, std::string_view data,
 		const bool return_flag) {
+	std::lock_guard lock(m_mutex);
 	if (!running) return;
-	auto data_to_send = new DataToSend{ from_id, to_id, visibility,
-			std::string(data), return_flag };
-	{
-		std::lock_guard lock(m_mutex);
-		m_data_to_send_queue.emplace(data_to_send);
-		m_data_to_send_queue_cv.notify_one();
-	}
+	auto data_to_send = new DataToSend{ from_id, to_id, visibility, std::string(data), return_flag };
+	m_data_to_send_queue.emplace(data_to_send);
+	m_data_to_send_queue_cv.notify_one();
 }
 
 void ServerMain::Start(bool wait_thread) {
@@ -518,6 +517,7 @@ void ServerMain::Start(bool wait_thread) {
 	}).detach();
 
 	auto CreateServerSideClient = [this](std::unique_ptr<Socket> socket) {
+		std::lock_guard lock(m_mutex);
 		if (clients.size() >= cfg.server_max_users.Get()) {
 			socket->OnInfo = [](std::string_view m) {
 				OutputMt::Info("S: {} (Too many users)", m);
@@ -548,10 +548,10 @@ void ServerMain::Start(bool wait_thread) {
 }
 
 void ServerMain::Stop() {
-	if (!running) return;
-	Output::Debug("Server: Stopping");
 	std::lock_guard lock(m_mutex);
+	if (!running) return;
 	running = false;
+	Output::Debug("Server: Stopping");
 	for (const auto& it : clients) {
 		it.second->Send("\uFFFD0");
 		// the client will be removed upon SystemMessage::CLOSE
@@ -580,6 +580,11 @@ Game_ConfigMultiplayer ServerMain::GetConfig() const {
 static ServerMain _instance;
 
 ServerMain& Server() {
+#ifndef _WIN32
+	// Prevent SIGPIPE caused by remote connection close
+	// To disable SIGPIPE in GDB: (gdb) handle SIGPIPE nostop
+	std::signal(SIGPIPE, SIG_IGN);
+#endif
 	return _instance;
 }
 

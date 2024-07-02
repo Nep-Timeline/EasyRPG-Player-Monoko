@@ -71,8 +71,6 @@ protected:
 	void Dispatch(const std::string_view data);
 	void DispatchSystem(SystemMessage m);
 
-	void Print(std::string_view tag, std::string_view data);
-
 private:
 	std::map<uint8_t, std::function<void (std::istream&)>> handlers;
 	SystemMessageHandler sys_handlers[static_cast<size_t>(SystemMessage::_PLACEHOLDER)];

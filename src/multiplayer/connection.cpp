@@ -60,7 +60,6 @@ void Connection::Dispatch(const std::string_view data) {
 		if (it != handlers.end()) {
 			std::invoke(it->second, pkt_iss);
 		} else {
-			OutputMt::Debug("Connection: Unregistered packet received");
 			break;
 		}
 		ReadU16(pkt_iss); // skip unused bytes
@@ -76,11 +75,4 @@ void Connection::DispatchSystem(SystemMessage m) {
 	auto f = sys_handlers[static_cast<size_t>(m)];
 	if (f)
 		std::invoke(f, *this);
-}
-
-void Connection::Print(std::string_view tag, std::string_view data) {
-	if (data == std::string("\x00\x03\x01\x28\x28", 5)) { // heartbeat
-		return;
-	}
-	OutputMt::Debug("{}{} bytes\n{}", tag, data.size(), HexDump(data));
 }

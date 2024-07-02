@@ -50,10 +50,7 @@ public:
 	std::function<void(std::string_view data)> OnWarning;
 
 private:
-	void OnMessageBuffer(const char* buf, const size_t size) {
-		std::string_view data(reinterpret_cast<const char*>(buf), size);
-		OnMessage(data);
-	}
+	void OnMessageBuffer(const char* buf, const size_t size);
 
 	bool got_head = false;
 	uint16_t data_size = 0;
@@ -66,6 +63,11 @@ private:
 	WebSocket websocket;
 };
 
+inline void DataHandler::OnMessageBuffer(const char* buf, const size_t size) {
+	std::string_view data(reinterpret_cast<const char*>(buf), size);
+	OnMessage(data);
+}
+
 /**
  * Socket
  * Write/OnData: Raw data
@@ -75,44 +77,27 @@ class Socket {
 public:
 	Socket();
 
-	enum class AsyncCall {
-		WRITE,
-		OPENSOCKET,
-		CLOSESOCKET,
-	};
-
 	std::function<void(std::string_view data)> OnData;
 	std::function<void(std::string_view data)> OnMessage;
 	std::function<void()> OnOpen;
 	std::function<void()> OnClose;
 
 	void InitStream(uv_loop_t* loop);
+	uv_tcp_t* GetStream();
 
-	uv_tcp_t* GetStream() {
-		return &stream;
-	}
+	void AsyncKeepAlive(std::unique_ptr<Socket>& socket);
+	void SetReadTimeout(uint16_t _read_timeout_ms);
 
-	void AsyncKeepAlive(std::unique_ptr<Socket>& socket) {
-		async_data.socket_alt_ptr = std::move(socket);
-	}
-
-	void SetReadTimeout(uint16_t _read_timeout_ms) {
-		read_timeout_ms = _read_timeout_ms;
-	}
-
-	inline void Send(std::string_view data) { data_handler.Send(data); }
+	void Send(std::string_view data);
 	void Write(std::string_view data);
 	void Open();
-	inline void Close() { data_handler.Close(); }
+	void Close();
 	void CloseSocket();
 
 	std::function<void(std::string_view data)> OnInfo;
 	std::function<void(std::string_view data)> OnWarning;
 
 private:
-	std::mutex m_call_mutex;
-	std::queue<AsyncCall> m_request_queue;
-
 	struct AsyncData {
 		Socket* socket;
 		// Only to prevent the pointer from being deleted
@@ -120,16 +105,22 @@ private:
 	} async_data;
 	uv_async_t async;
 
+	enum class AsyncRequest {
+		WRITE,
+		OPENSOCKET,
+		CLOSESOCKET,
+	};
+
 	uv_tcp_t stream;
-	uv_write_t send_req;
+	uv_write_t write_req;
 	uv_timer_t read_timeout_req;
 
 	uint64_t read_timeout_ms = 0;
 
-	// use queue: buffers must remain valid while sending
-	std::queue<std::string> m_send_queue;
-	bool is_sending = false;
-
+	std::mutex m_mutex;
+	std::queue<AsyncRequest> m_request_queue;
+	std::queue<std::string> m_write_queue; // use queue: buffers must remain valid while writing
+	bool is_writing = false;
 	bool is_initialized = false;
 
 	void InternalOpenSocket();
@@ -138,6 +129,26 @@ private:
 
 	DataHandler data_handler;
 };
+
+inline uv_tcp_t* Socket::GetStream() {
+	return &stream;
+}
+
+inline void Socket::AsyncKeepAlive(std::unique_ptr<Socket>& socket) {
+	async_data.socket_alt_ptr = std::move(socket);
+}
+
+inline void Socket::SetReadTimeout(uint16_t _read_timeout_ms) {
+	read_timeout_ms = _read_timeout_ms;
+}
+
+inline void Socket::Send(std::string_view data) {
+	data_handler.Send(data);
+}
+
+inline void Socket::Close() {
+	data_handler.Close();
+}
 
 /**
  * ConnectorSocket

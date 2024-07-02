@@ -226,7 +226,6 @@ void ClientConnection::HandleCloseOrTerm(bool terminated) {
 
 void ClientConnection::HandleData(std::string_view data) {
 	std::lock_guard lock(m_receive_mutex);
-	Print("Client Received: ", data);
 	if (data.size() == 4 && data.substr(0, 3) == "\uFFFD") {
 		std::string_view code = data.substr(3, 1);
 		if (code == "0")
@@ -239,7 +238,7 @@ void ClientConnection::HandleData(std::string_view data) {
 		m_system_queue.push(SystemMessage::TERMINATED);
 		return;
 	}
-	m_data_queue.push(std::string(data));
+	m_data_queue.emplace(data);
 }
 
 void ClientConnection::Open() {
@@ -271,7 +270,6 @@ void ClientConnection::Send(std::string_view data) {
 	if (!connected)
 		return;
 	socket->Send(data);
-	Print("Client Sent: ", data);
 }
 
 void ClientConnection::Receive() {

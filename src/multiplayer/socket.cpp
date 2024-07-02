@@ -135,11 +135,6 @@ void DataHandler::GotDataBuffer(const char* buf, size_t buf_used) {
 						}
 						break; // Go to the next packet
 					}
-				} else {
-					OnWarning(std::string("DataHandler::GotDataBuffer exception (data): ")
-						.append("tmp_buf_used: ").append(std::to_string(tmp_buf_used))
-						.append(", data_size: ").append(std::to_string(data_size))
-						.append(", data_remaining: ").append(std::to_string(data_remaining)));
 				}
 				got_head = false;
 				tmp_buf_used = 0;
@@ -194,7 +189,7 @@ void DataHandler::Close() {
  */
 
 Socket::Socket() {
-	send_req.data = this;
+	write_req.data = this;
 	// Wrapper is needed, the callback has not been assigned yet
 	data_handler.OnWrite = [this](std::string_view data) { Write(data); };
 	data_handler.OnMessage = [this](std::string_view data) { OnMessage(data); };
@@ -209,20 +204,21 @@ void Socket::InitStream(uv_loop_t* loop) {
 	uv_async_init(loop, &async, [](uv_async_t* handle) {
 		auto async_data = static_cast<AsyncData*>(handle->data);
 		auto socket = async_data->socket;
-		std::lock_guard lock(socket->m_call_mutex);
+		std::lock_guard lock(socket->m_mutex);
 		while (!socket->m_request_queue.empty()) {
 			switch (socket->m_request_queue.front()) {
-			case AsyncCall::WRITE:
-				if (!socket->is_sending &&
-						!socket->m_send_queue.empty()) {
-					socket->is_sending = true;
+			case AsyncRequest::WRITE:
+				// Need to ensure the m_write_queue is not empty
+				//  as AsyncRequest::WRITE might be unexpectedly called multiple times
+				if (!socket->is_writing && !socket->m_write_queue.empty()) {
+					socket->is_writing = true;
 					socket->InternalWrite();
 				}
 				break;
-			case AsyncCall::OPENSOCKET:
+			case AsyncRequest::OPENSOCKET:
 				socket->InternalOpenSocket();
 				break;
-			case AsyncCall::CLOSESOCKET:
+			case AsyncRequest::CLOSESOCKET:
 				socket->InternalCloseSocket();
 				break;
 			}
@@ -236,44 +232,46 @@ void Socket::InitStream(uv_loop_t* loop) {
 }
 
 void Socket::Write(std::string_view data) {
-	std::lock_guard lock(m_call_mutex);
-
-	if (!is_initialized || m_send_queue.size() > 100)
-		return;
-
-	m_send_queue.emplace(data);
-
-	m_request_queue.push(AsyncCall::WRITE);
-	uv_async_send(&async);
+	std::lock_guard lock(m_mutex);
+	if (m_write_queue.size() <= 100) {
+		m_write_queue.emplace(data);
+		m_request_queue.push(AsyncRequest::WRITE);
+		uv_async_send(&async);
+	}
 }
 
 void Socket::InternalWrite() {
-	std::string_view data = m_send_queue.front();
+	if (!is_initialized) return;
+	std::string_view data = m_write_queue.front();
 	uv_buf_t buf = uv_buf_init(const_cast<char*>(data.data()), data.size());
-	uv_write(&send_req, reinterpret_cast<uv_stream_t*>(&stream), &buf, 1,
+	int err = uv_write(&write_req, reinterpret_cast<uv_stream_t*>(&stream), &buf, 1,
 			[](uv_write_t* req, int err) {
 		auto socket = static_cast<Socket*>(req->data);
 		if (err) {
-			socket->OnWarning(std::string("Writing to the stream failed: ").append(uv_strerror(err)));
+			socket->InternalCloseSocket();
+			return;
 		}
-		if (socket->is_sending) {
-			socket->m_send_queue.pop();
-			if (socket->m_send_queue.empty()) {
-				socket->is_sending = false;
+		if (socket->is_writing) {
+			std::lock_guard lock(socket->m_mutex);
+			socket->m_write_queue.pop();
+			if (socket->m_write_queue.empty()) {
+				socket->is_writing = false;
 			} else {
 				socket->InternalWrite();
 			}
 		}
 	});
+	if (err) InternalCloseSocket();
 }
 
 void Socket::Open() {
-	std::lock_guard lock(m_call_mutex);
-	m_request_queue.push(AsyncCall::OPENSOCKET);
+	std::lock_guard lock(m_mutex);
+	m_request_queue.push(AsyncRequest::OPENSOCKET);
 	uv_async_send(&async);
 }
 
 void Socket::InternalOpenSocket() {
+	if (!is_initialized) return;
 	uv_read_start(reinterpret_cast<uv_stream_t*>(&stream),
 			[](uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
 		buf->base = new char[DataHandler::BUFFER_SIZE];
@@ -282,11 +280,6 @@ void Socket::InternalOpenSocket() {
 		auto socket = static_cast<Socket*>(stream->data);
 		DataHandler& data_handler = socket->data_handler;
 		if (nread < 0) {
-			// EOF means the connection is just closed remotely,
-			//  so do not output warnings
-			if (nread != UV_EOF) {
-				socket->OnWarning(std::string("Read failed: ").append(uv_strerror(nread)));
-			}
 			socket->InternalCloseSocket();
 		} else if (nread > 0) {
 			if (socket->OnData) {
@@ -295,16 +288,13 @@ void Socket::InternalOpenSocket() {
 				data_handler.GotDataBuffer(buf->base, nread);
 			}
 		}
-		if (buf->base) {
-			delete[] buf->base;
-		}
+		delete[] buf->base;
 		if (socket->read_timeout_ms > 0)
 			uv_timer_again(&socket->read_timeout_req);
 	});
 	if (read_timeout_ms > 0) {
 		uv_timer_start(&read_timeout_req, [](uv_timer_t* handle) {
 			auto socket = static_cast<Socket*>(handle->data);
-			socket->OnWarning(std::string("Read timeout: ").append(GetPeerAddress(&socket->stream)));
 			socket->InternalCloseSocket();
 		}, read_timeout_ms, read_timeout_ms);
 	}
@@ -313,25 +303,26 @@ void Socket::InternalOpenSocket() {
 }
 
 void Socket::CloseSocket() {
-	std::lock_guard lock(m_call_mutex);
-	if (!is_initialized)
-		return;
-	m_request_queue.push(AsyncCall::CLOSESOCKET);
+	std::lock_guard lock(m_mutex);
+	m_request_queue.push(AsyncRequest::CLOSESOCKET);
 	uv_async_send(&async);
 }
 
 void Socket::InternalCloseSocket() {
-	if (uv_is_closing(reinterpret_cast<uv_handle_t*>(&stream)))
-		return;
+	if (!is_initialized) return;
+	is_initialized = false;
 	OnInfo(std::string("Closing connection: ").append(GetPeerAddress(&stream)));
-	uv_timer_stop(&read_timeout_req);
+	uv_close(reinterpret_cast<uv_handle_t*>(&read_timeout_req), nullptr);
+	// Rarely closed unexpectedly
+	if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(&async)))
+		uv_close(reinterpret_cast<uv_handle_t*>(&async), nullptr);
 	uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
 		auto socket = static_cast<Socket*>(handle->data);
-		uv_close(reinterpret_cast<uv_handle_t*>(&socket->read_timeout_req), nullptr);
-		uv_close(reinterpret_cast<uv_handle_t*>(&socket->async), nullptr);
-		socket->is_initialized = false;
-		socket->m_send_queue = decltype(m_send_queue){};
-		socket->is_sending = false;
+		{
+			std::lock_guard lock(socket->m_mutex);
+			socket->m_write_queue = decltype(m_write_queue){};
+		}
+		socket->is_writing = false;
 		if (socket->OnClose) socket->OnClose();
 	});
 }

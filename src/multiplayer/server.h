@@ -35,7 +35,7 @@ class ServerMain {
 
 	bool running = false;
 	int client_id = 10;
-	std::map<int, std::unique_ptr<ServerSideClient>> clients;
+	std::unordered_map<int, std::unique_ptr<ServerSideClient>> clients;
 
 	std::unique_ptr<ServerListener> server_listener;
 	std::unique_ptr<ServerListener> server_listener_2;
