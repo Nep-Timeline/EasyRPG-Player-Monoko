@@ -54,6 +54,31 @@
 #  include <emscripten/eventloop.h>
 #endif
 
+namespace {
+
+/* Due to creating a certain number of pictures based on the value of the picture id,
+ *  it is necessary to limit the maximum value of this id. See: Game_Pictures::GetPicture()
+ */
+const int picture_client_limit = 100;
+const int picture_limit = 50;
+
+int GetPictureLimit() {
+	auto num_pics = Game_Pictures::GetDefaultNumberOfPictures();
+	if (!num_pics || num_pics > picture_limit) num_pics = picture_limit;
+	return num_pics;
+}
+
+// player_id and picture_id starts at 1
+int GetPlayerPictureId(int player_id, int picture_id) {
+	auto pic_limit = GetPictureLimit();
+	// the picture_id will be used as the size, so when used for
+	//  indexing in Game_Pictures::GetPicture(), it will be -1
+	return ((player_id - 1) % picture_client_limit + 1) * pic_limit
+			+ ((picture_id - 1) % pic_limit + 1);
+}
+
+} // end of namespace
+
 using namespace Messages;
 
 static Game_Multiplayer _instance;
@@ -296,7 +321,10 @@ void Game_Multiplayer::InitConnection() {
 		players.erase(it);
 		repeating_flashes.erase(p.id);
 		if (Main_Data::game_pictures) {
-			Main_Data::game_pictures->EraseAllMultiplayerForPlayer(p.id);
+			// Erase pictures for a player
+			auto start = GetPlayerPictureId(p.id + 1, 1);
+			auto end = GetPlayerPictureId(p.id + 1, GetPictureLimit());
+			Main_Data::game_pictures->EraseRange(start, end);
 		}
 	});
 	connection->RegisterHandler<ChatPacket>([this, SetGlobalPlayersSystem](ChatPacket& p) {
@@ -414,40 +442,47 @@ void Game_Multiplayer::InitConnection() {
 		}
 	});
 
-	auto modify_args = [] (PicturePacket& pa) {
+	auto pic_modify_args = [](PicturePacket& p) {
 		if (Game_Map::LoopHorizontal()) {
-			int alt_map_x = pa.map_x + Game_Map::GetTilesX() * TILE_SIZE * TILE_SIZE;
-			if (std::abs(pa.map_x - Game_Map::GetPositionX()) > std::abs(alt_map_x - Game_Map::GetPositionX())) {
-				pa.map_x = alt_map_x;
+			int alt_map_x = p.map_x + Game_Map::GetTilesX() * TILE_SIZE * TILE_SIZE;
+			if (std::abs(p.map_x - Game_Map::GetPositionX()) > std::abs(alt_map_x - Game_Map::GetPositionX())) {
+				p.map_x = alt_map_x;
 			}
 		}
 		if (Game_Map::LoopVertical()) {
-			int alt_map_y = pa.map_y + Game_Map::GetTilesY() * TILE_SIZE * TILE_SIZE;
-			if (std::abs(pa.map_y - Game_Map::GetPositionY()) > std::abs(alt_map_y - Game_Map::GetPositionY())) {
-				pa.map_y = alt_map_y;
+			int alt_map_y = p.map_y + Game_Map::GetTilesY() * TILE_SIZE * TILE_SIZE;
+			if (std::abs(p.map_y - Game_Map::GetPositionY()) > std::abs(alt_map_y - Game_Map::GetPositionY())) {
+				p.map_y = alt_map_y;
 			}
 		}
-		pa.params.position_x += (int)(std::floor((pa.map_x / TILE_SIZE) - (pa.pan_x / (TILE_SIZE * 2))) - std::floor((Game_Map::GetPositionX() / TILE_SIZE) - Main_Data::game_player->GetPanX() / (TILE_SIZE * 2)));
-		pa.params.position_y += (int)(std::floor((pa.map_y / TILE_SIZE) - (pa.pan_y / (TILE_SIZE * 2))) - std::floor((Game_Map::GetPositionY() / TILE_SIZE) - Main_Data::game_player->GetPanY() / (TILE_SIZE * 2)));
+		p.params.position_x += (int)(
+			std::floor((p.map_x / TILE_SIZE) - (p.pan_x / (TILE_SIZE * 2)))
+			- std::floor((Game_Map::GetPositionX() / TILE_SIZE)
+			- Main_Data::game_player->GetPanX() / (TILE_SIZE * 2))
+		);
+		p.params.position_y += (int)(
+			std::floor((p.map_y / TILE_SIZE) - (p.pan_y / (TILE_SIZE * 2)))
+			- std::floor((Game_Map::GetPositionY() / TILE_SIZE)
+			- Main_Data::game_player->GetPanY() / (TILE_SIZE * 2)));
 	};
-
-	connection->RegisterHandler<ShowPicturePacket>([this, modify_args](ShowPicturePacket& p) {
+	connection->RegisterHandler<ShowPicturePacket>([this, pic_modify_args](ShowPicturePacket& p) {
 		if (players.find(p.id) == players.end()) return;
-		modify_args(p);
-		int pic_id = p.pic_id + (p.id + 1) * 50; //offset to avoid conflicting with others using the same picture
+		pic_modify_args(p);
+		int pic_id = GetPlayerPictureId(p.id + 1, p.pic_id);
 		Main_Data::game_pictures->Show(pic_id, p.params);
 	});
-	connection->RegisterHandler<MovePicturePacket>([this, modify_args](MovePicturePacket& p) {
+	connection->RegisterHandler<MovePicturePacket>([this, pic_modify_args](MovePicturePacket& p) {
 		if (players.find(p.id) == players.end()) return;
-		int pic_id = p.pic_id + (p.id + 1) * 50; //offset to avoid conflicting with others using the same picture
-		modify_args(p);
+		pic_modify_args(p);
+		int pic_id = GetPlayerPictureId(p.id + 1, p.pic_id);
 		Main_Data::game_pictures->Move(pic_id, p.params);
 	});
 	connection->RegisterHandler<ErasePicturePacket>([this](ErasePicturePacket& p) {
 		if (players.find(p.id) == players.end()) return;
-		int pic_id = p.pic_id + (p.id + 1) * 50; //offset to avoid conflicting with others using the same picture
+		int pic_id = GetPlayerPictureId(p.id + 1, p.pic_id);
 		Main_Data::game_pictures->Erase(pic_id);
 	});
+
 	connection->RegisterHandler<ShowPlayerBattleAnimPacket>([this](ShowPlayerBattleAnimPacket& p) {
 		if (players.find(p.id) == players.end()) return;
 		const lcf::rpg::Animation* anim = lcf::ReaderUtil::GetElement(lcf::Data::animations, p.anim_id);
@@ -591,7 +626,10 @@ void Game_Multiplayer::Reset() {
 	sync_action_events.clear();
 	ResetRepeatingFlash();
 	if (Main_Data::game_pictures) {
-		Main_Data::game_pictures->EraseAllMultiplayer();
+		// Erase all pictures
+		auto start = GetPlayerPictureId(1, 1);
+		auto end = GetPlayerPictureId(picture_client_limit, GetPictureLimit());
+		Main_Data::game_pictures->EraseRange(start, end);
 	}
 	auto cfg_it = virtual_3d_map_configs.find(room_id);
 	if (cfg_it != virtual_3d_map_configs.end() && cfg_it->second.refresh_switch_id != -1)

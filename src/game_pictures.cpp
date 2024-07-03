@@ -345,17 +345,7 @@ void Game_Pictures::EraseAll() {
 	}
 }
 
-void Game_Pictures::EraseAllMultiplayer() {
-	for (auto& pic: pictures) {
-		if (pic.data.ID > GetDefaultNumberOfPictures()) {
-			pic.Erase();
-		}
-	}
-}
-
-void Game_Pictures::EraseAllMultiplayerForPlayer(int id) {
-	auto start = (id + 1) * GetDefaultNumberOfPictures() + 1;
-	auto end = start + GetDefaultNumberOfPictures();
+void Game_Pictures::EraseRange(int start, int end) {
 	for (auto& pic: pictures) {
 		if (pic.data.ID >= start && pic.data.ID < end) {
 			pic.Erase();
