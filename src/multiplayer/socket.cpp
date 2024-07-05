@@ -233,11 +233,9 @@ void Socket::InitStream(uv_loop_t* loop) {
 
 void Socket::Write(std::string_view data) {
 	std::lock_guard lock(m_mutex);
-	if (m_write_queue.size() <= 100) {
-		m_write_queue.emplace(data);
-		m_request_queue.push(AsyncRequest::WRITE);
-		uv_async_send(&async);
-	}
+	m_write_queue.emplace(data);
+	m_request_queue.push(AsyncRequest::WRITE);
+	uv_async_send(&async);
 }
 
 void Socket::InternalWrite() {
@@ -262,6 +260,11 @@ void Socket::InternalWrite() {
 		}
 	});
 	if (err) InternalCloseSocket();
+}
+
+size_t Socket::GetWriteQueueSize() {
+	std::lock_guard lock(m_mutex);
+	return m_write_queue.size();
 }
 
 void Socket::Open() {

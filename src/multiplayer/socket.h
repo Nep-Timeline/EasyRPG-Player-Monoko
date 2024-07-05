@@ -90,6 +90,7 @@ public:
 
 	void Send(std::string_view data);
 	void Write(std::string_view data);
+	size_t GetWriteQueueSize();
 	void Open();
 	void Close();
 	void CloseSocket();

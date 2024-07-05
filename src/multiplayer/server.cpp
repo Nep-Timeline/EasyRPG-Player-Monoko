@@ -77,8 +77,18 @@ public:
 		socket->Close();
 	}
 
+	/**
+	 * Send back to oneself
+	 */
+
 	void Send(std::string_view data) override {
-		socket->Send(data); // send back to oneself
+		if (socket->GetWriteQueueSize() <= 80)
+			socket->Send(data);
+	}
+
+	void SendAlt(std::string_view data) {
+		if (socket->GetWriteQueueSize() <= 100)
+			socket->Send(data);
 	}
 };
 
@@ -413,8 +423,15 @@ public:
 		connection.Close();
 	}
 
-	void Send(std::string_view data) {
-		connection.Send(data);
+	void Send(std::string_view data, bool alt) {
+		if (alt)
+			connection.SendAlt(data);
+		else
+			connection.Send(data);
+	}
+
+	void SendAlt(std::string_view data) {
+		connection.SendAlt(data);
 	}
 
 	int GetId() const {
@@ -498,17 +515,18 @@ void ServerMain::Start(bool wait_thread) {
 					if (!data_to_send->return_flag &&
 							data_to_send->from_id == to_client->GetId())
 						continue;
+					bool send_alt = data_to_send->return_flag;
 					// send to local
 					if (data_to_send->visibility == Messages::CV_LOCAL &&
 							data_to_send->to_id == to_client->GetRoomId()) {
-						to_client->Send(data_to_send->data);
+						to_client->Send(data_to_send->data, send_alt);
 					// send to crypt
 					} else if (data_to_send->visibility == Messages::CV_CRYPT &&
 							from_client && from_client->GetChatCryptKeyHash() == to_client->GetChatCryptKeyHash()) {
-						to_client->Send(data_to_send->data);
+						to_client->Send(data_to_send->data, send_alt);
 					// send to global
 					} else if (data_to_send->visibility == Messages::CV_GLOBAL) {
-						to_client->Send(data_to_send->data);
+						to_client->Send(data_to_send->data, send_alt);
 					}
 				}
 			}
@@ -553,7 +571,7 @@ void ServerMain::Stop() {
 	running = false;
 	Output::Debug("Server: Stopping");
 	for (const auto& it : clients) {
-		it.second->Send("\uFFFD0");
+		it.second->SendAlt("\uFFFD0");
 		// the client will be removed upon SystemMessage::CLOSE
 		it.second->Close();
 	}
