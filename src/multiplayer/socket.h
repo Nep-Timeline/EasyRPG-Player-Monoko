@@ -85,7 +85,7 @@ public:
 	void InitStream(uv_loop_t* loop);
 	uv_tcp_t* GetStream();
 
-	void AsyncKeepAlive(std::unique_ptr<Socket>& socket);
+	void MoveSocketPtr(std::unique_ptr<Socket>& socket);
 	void SetReadTimeout(uint16_t _read_timeout_ms);
 
 	void Send(std::string_view data);
@@ -99,13 +99,6 @@ public:
 	std::function<void(std::string_view data)> OnWarning;
 
 private:
-	struct AsyncData {
-		Socket* socket;
-		// Only to prevent the pointer from being deleted
-		std::unique_ptr<Socket> socket_alt_ptr;
-	} async_data;
-	uv_async_t async;
-
 	enum class AsyncRequest {
 		WRITE,
 		OPENSOCKET,
@@ -113,8 +106,9 @@ private:
 	};
 
 	uv_tcp_t stream;
-	uv_write_t write_req;
+	uv_async_t async;
 	uv_timer_t read_timeout_req;
+	uv_write_t write_req;
 
 	uint64_t read_timeout_ms = 0;
 
@@ -123,6 +117,10 @@ private:
 	std::queue<std::string> m_write_queue; // use queue: buffers must remain valid while writing
 	bool is_writing = false;
 	bool is_initialized = false;
+	int close_counter = 0;
+
+	// Only to prevent the pointer from being deleted
+	std::unique_ptr<Socket> socket_alt_ptr;
 
 	void InternalOpenSocket();
 	void InternalCloseSocket();
@@ -135,8 +133,8 @@ inline uv_tcp_t* Socket::GetStream() {
 	return &stream;
 }
 
-inline void Socket::AsyncKeepAlive(std::unique_ptr<Socket>& socket) {
-	async_data.socket_alt_ptr = std::move(socket);
+inline void Socket::MoveSocketPtr(std::unique_ptr<Socket>& socket) {
+	socket_alt_ptr = std::move(socket);
 }
 
 inline void Socket::SetReadTimeout(uint16_t _read_timeout_ms) {

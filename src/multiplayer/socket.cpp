@@ -199,11 +199,9 @@ Socket::Socket() {
 
 void Socket::InitStream(uv_loop_t* loop) {
 	stream.data = this;
-	async_data.socket = this;
-	async.data = &async_data;
+	async.data = this;
 	uv_async_init(loop, &async, [](uv_async_t* handle) {
-		auto async_data = static_cast<AsyncData*>(handle->data);
-		auto socket = async_data->socket;
+		auto socket = static_cast<Socket*>(handle->data);
 		std::lock_guard lock(socket->m_mutex);
 		while (!socket->m_request_queue.empty()) {
 			switch (socket->m_request_queue.front()) {
@@ -315,19 +313,24 @@ void Socket::InternalCloseSocket() {
 	if (!is_initialized) return;
 	is_initialized = false;
 	OnInfo(std::string("Closing connection: ").append(GetPeerAddress(&stream)));
-	uv_close(reinterpret_cast<uv_handle_t*>(&read_timeout_req), nullptr);
-	// Rarely closed unexpectedly
-	if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(&async)))
-		uv_close(reinterpret_cast<uv_handle_t*>(&async), nullptr);
-	uv_close(reinterpret_cast<uv_handle_t*>(&stream), [](uv_handle_t* handle) {
+	auto CloseCb = [](uv_handle_t* handle) {
 		auto socket = static_cast<Socket*>(handle->data);
-		{
-			std::lock_guard lock(socket->m_mutex);
-			socket->m_write_queue = decltype(m_write_queue){};
+		if (++socket->close_counter == 3) {
+			{
+				std::lock_guard lock(socket->m_mutex);
+				socket->m_write_queue = decltype(m_write_queue){};
+			}
+			socket->is_writing = false;
+			socket->close_counter = 0;
+			if (socket->OnClose) {
+				socket->OnClose();
+			}
+			socket->socket_alt_ptr.reset();
 		}
-		socket->is_writing = false;
-		if (socket->OnClose) socket->OnClose();
-	});
+	};
+	uv_close(reinterpret_cast<uv_handle_t*>(&read_timeout_req), CloseCb);
+	uv_close(reinterpret_cast<uv_handle_t*>(&async), CloseCb);
+	uv_close(reinterpret_cast<uv_handle_t*>(&stream), CloseCb);
 }
 
 /**

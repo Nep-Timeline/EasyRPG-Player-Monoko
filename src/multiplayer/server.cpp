@@ -542,7 +542,7 @@ void ServerMain::Start(bool wait_thread) {
 			};
 			socket->Send("\uFFFD1");
 			socket->Close();
-			socket->AsyncKeepAlive(socket);
+			socket->MoveSocketPtr(socket);
 		} else {
 			auto& client = clients[client_id];
 			client.reset(new ServerSideClient(this, client_id++, std::move(socket)));
