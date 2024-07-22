@@ -45,6 +45,8 @@ public:
 		nametag_mode = static_cast<NametagMode>(mode);
 	}
 
+	std::string GetDebugText();
+
 	// Config
 	void SetRemoteAddress(std::string address);
 	void SetConfig(const Game_ConfigMultiplayer& cfg);

@@ -1394,6 +1394,9 @@ void InputsTyping() {
 			Main_Data::game_switches->Set(atoi(sw_id.c_str()), atoi(fnd.next(" ").c_str()));
 			Game_Map::SetNeedRefresh(true);
 			AddClientInfo("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
+		// command: !debugtext
+		} else if (command == "!debugtext" || command == "!dt") {
+			Output::InfoStr(GMI().GetDebugText());
 		// command: !help
 		} else if (command == "!help") {
 			ShowUsage(fnd);

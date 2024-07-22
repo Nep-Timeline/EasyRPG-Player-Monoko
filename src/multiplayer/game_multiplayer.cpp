@@ -115,6 +115,7 @@ namespace {
 	};
 	std::map<std::tuple<int8_t, int16_t, int16_t>, uint8_t> players_pos_cache; // {type, x, y} = any
 	std::map<int, Virtual3DMapConfig> virtual_3d_map_configs;
+	bool virtual_3d_entered = false;
 
 	/**
 	 * unused
@@ -212,25 +213,54 @@ bool MovePlayerToPos(Game_PlayerOther& player, int x, int y) {
 	return true;
 }
 
-void SendBasicData() {
-	connection.SendPacketAsync<RoomPacket>(room_id);
-	auto& player = Main_Data::game_player;
-	auto cfg_it = virtual_3d_map_configs.find(room_id);
-	if (cfg_it != virtual_3d_map_configs.end() && cfg_it->second.character_event_id != -1) {
-		Game_Character* ch = Game_Map::GetEvent(cfg_it->second.character_event_id);
-		if (ch)
-			connection.SendPacketAsync<MovePacket>(1, ch->GetX(), ch->GetY());
-	} else
-		connection.SendPacketAsync<MovePacket>(0, player->GetX(), player->GetY());
-	connection.SendPacketAsync<SpeedPacket>(player->GetMoveSpeed());
-	connection.SendPacketAsync<SpritePacket>(player->GetSpriteName(),
-				player->GetSpriteIndex());
-	if (player->GetFacing() > 0) {
-		connection.SendPacketAsync<FacingPacket>(player->GetFacing());
+struct PlayerData {
+	int pos_type;
+	int pos_x, pos_y;
+	int speed;
+	std::string sprite_name;
+	int sprite_index;
+	int facing;
+	bool hidden;
+	std::string system_name;
+};
+
+PlayerData GetPlayerData() {
+	const auto& player = Main_Data::game_player;
+	PlayerData d;
+	d.pos_type = 0;
+	d.pos_x = player->GetX();
+	d.pos_y = player->GetY();
+	if (virtual_3d_entered) {
+		auto cfg_it = virtual_3d_map_configs.find(room_id);
+		if (cfg_it != virtual_3d_map_configs.end() && cfg_it->second.character_event_id != -1) {
+			Game_Character* ch = Game_Map::GetEvent(cfg_it->second.character_event_id);
+			if (ch) {
+				d.pos_type = 1;
+				d.pos_x = ch->GetX();
+				d.pos_y = ch->GetY();
+			}
+		}
 	}
-	connection.SendPacketAsync<HiddenPacket>(player->IsSpriteHidden());
-	auto sysn = Main_Data::game_system->GetSystemName();
-	connection.SendPacketAsync<SystemPacket>(ToString(sysn));
+	d.speed = player->GetMoveSpeed();
+	d.sprite_name = player->GetSpriteName();
+	d.sprite_index = player->GetSpriteIndex();
+	d.facing = player->GetFacing();
+	d.hidden = player->IsSpriteHidden();
+	d.system_name = ToString(Main_Data::game_system->GetSystemName());
+	return d;
+}
+
+void SendBasicData() {
+	PlayerData d = GetPlayerData();
+	connection.SendPacketAsync<RoomPacket>(room_id);
+	connection.SendPacketAsync<MovePacket>(d.pos_type, d.pos_x, d.pos_y);
+	connection.SendPacketAsync<SpeedPacket>(d.speed);
+	connection.SendPacketAsync<SpritePacket>(d.sprite_name, d.sprite_index);
+	if (d.facing > 0) {
+		connection.SendPacketAsync<FacingPacket>(d.facing);
+	}
+	connection.SendPacketAsync<HiddenPacket>(d.hidden);
+	connection.SendPacketAsync<SystemPacket>(d.system_name);
 }
 
 void ResetRepeatingFlash() {
@@ -255,9 +285,11 @@ void Reset() {
 		auto end = GetPlayerPictureId(picture_client_limit, GetPictureLimit());
 		Main_Data::game_pictures->EraseRange(start, end);
 	}
-	auto cfg_it = virtual_3d_map_configs.find(room_id);
-	if (cfg_it != virtual_3d_map_configs.end() && cfg_it->second.refresh_switch_id != -1)
-		Main_Data::game_switches->Flip(cfg_it->second.refresh_switch_id);
+	if (virtual_3d_entered) {
+		auto cfg_it = virtual_3d_map_configs.find(room_id);
+		if (cfg_it != virtual_3d_map_configs.end() && cfg_it->second.refresh_switch_id != -1)
+			Main_Data::game_switches->Flip(cfg_it->second.refresh_switch_id);
+	}
 }
 
 bool IsPictureSynced(int pic_id, Game_Pictures::ShowParams& params) {
@@ -434,13 +466,14 @@ void InitConnection() {
 			player.name_tag.reset();
 			DrawableMgr::SetLocalList(old_list);
 		}
-		// virtual 3d
-		auto cfg_it = virtual_3d_map_configs.find(room_id);
-		if (cfg_it != virtual_3d_map_configs.end()) {
-			for (const auto& it : player.previous_pos) {
-				players_pos_cache.erase(it.second);
-				if (cfg_it->second.refresh_switch_id != -1 && it.first == 1)
-					Main_Data::game_switches->Flip(cfg_it->second.refresh_switch_id);
+		if (virtual_3d_entered) {
+			auto cfg_it = virtual_3d_map_configs.find(room_id);
+			if (cfg_it != virtual_3d_map_configs.end()) {
+				for (const auto& it : player.previous_pos) {
+					players_pos_cache.erase(it.second);
+					if (cfg_it->second.refresh_switch_id != -1 && it.first == 1)
+						Main_Data::game_switches->Flip(cfg_it->second.refresh_switch_id);
+				}
 			}
 		}
 		fadeout_players.emplace_back(std::move(player));
@@ -649,6 +682,23 @@ Game_Multiplayer::Game_Multiplayer() {
 	InitConnection();
 }
 
+std::string Game_Multiplayer::GetDebugText() {
+	PlayerData d = GetPlayerData();
+	std::string sprite_name = std::move(d.sprite_name);
+	if (sprite_name.empty()) sprite_name = "/";
+	std::ostringstream os;
+	os << "map id: " << room_id
+		<< " | pos: (" << d.pos_x
+		<< ", " << d.pos_y
+		<< ") | speed: " << d.speed
+		<< " | sprite: (" << sprite_name
+		<< ", " << d.sprite_index
+		<< ") | facing: " << d.facing
+		<< " | hidden: " << d.hidden
+		<< " | system: " << d.system_name;
+	return os.str();
+}
+
 /** Config */
 
 void Game_Multiplayer::SetRemoteAddress(std::string address) {
@@ -826,6 +876,7 @@ void Game_Multiplayer::Quit() {
 void Game_Multiplayer::MainPlayerMoved(int dir) {
 	auto& p = Main_Data::game_player;
 	connection.SendPacketAsync<MovePacket>(0, p->GetX(), p->GetY());
+	virtual_3d_entered = false;
 }
 
 void Game_Multiplayer::MainPlayerFacingChanged(int dir) {
@@ -865,6 +916,8 @@ void Game_Multiplayer::MainPlayerChangedSpriteHidden(bool hidden) {
 }
 
 void Game_Multiplayer::MainPlayerTeleported(int map_id, int x, int y) {
+	if (virtual_3d_entered)
+		virtual_3d_entered = false;
 	/* Sometimes the starting position is not as expected,
 	 *  but is moved through teleportation again */
 	connection.SendPacketAsync<TeleportPacket>(x, y);
@@ -956,19 +1009,24 @@ void Game_Multiplayer::ApplyPlayerBattleAnimUpdates() {
 
 void Game_Multiplayer::EventLocationChanged(int event_id, int x, int y) {
 	auto cfg_it = virtual_3d_map_configs.find(room_id);
-	if (cfg_it != virtual_3d_map_configs.end())
-		if (cfg_it->second.character_event_id != -1 &&
-				event_id == cfg_it->second.character_event_id)
+	if (cfg_it != virtual_3d_map_configs.end()) {
+		if (cfg_it->second.character_event_id != -1
+				&& event_id == cfg_it->second.character_event_id) {
 			connection.SendPacketAsync<MovePacket>(1, x, y);
+			virtual_3d_entered = true;
+		}
+	}
 }
 
 int Game_Multiplayer::GetTerrainTag(int original_terrain_id, int x, int y) {
-	auto cfg_it = virtual_3d_map_configs.find(room_id);
-	if (cfg_it != virtual_3d_map_configs.end()) {
-		auto it = players_pos_cache.find(std::make_tuple(
-			cfg_it->second.character_event_id != -1 ? 1 : 0, x, y));
-		if (it != players_pos_cache.end())
-			return it->second;
+	if (virtual_3d_entered) {
+		auto cfg_it = virtual_3d_map_configs.find(room_id);
+		if (cfg_it != virtual_3d_map_configs.end()) {
+			auto it = players_pos_cache.find(std::make_tuple(
+				cfg_it->second.character_event_id != -1 ? 1 : 0, x, y));
+			if (it != players_pos_cache.end())
+				return it->second;
+		}
 	}
 	return original_terrain_id;
 }
