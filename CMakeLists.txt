@@ -883,6 +883,9 @@ if(PLAYER_BUILD_LIBLCF)
 			"${PLAYER_BUILD_LIBLCF_BRANCH}"
 			"${PLAYER_BUILD_LIBLCF_GIT}"
 			"${LIBLCF_PATH}")
+		include(Patch)
+		execute_process(COMMAND ${PATCH_EXECUTABLE} -p1 -d "${LIBLCF_PATH}"
+			--input=${CMAKE_CURRENT_SOURCE_DIR}/patches/liblcf.patch )
 	endif()
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/liblcf/builds/cmake/Modules")
 
@@ -890,6 +893,11 @@ if(PLAYER_BUILD_LIBLCF)
 	function(add_liblcf)
 		set(BUILD_SHARED_LIBS OFF)
 		set(LIBLCF_ENABLE_INSTALL OFF)
+		if(NOT BUILD_CLIENT AND BUILD_SERVER)
+			set(LIBLCF_ENABLE_TOOLS OFF)
+			set(LIBLCF_ENABLE_TESTS OFF)
+			set(LIBLCF_FOR_SERVER ON)
+		endif()
 		add_subdirectory(${LIBLCF_PATH})
 	endfunction()
 	add_liblcf()

@@ -1,0 +1,28 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index de8dec1..d20f95d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -14,6 +14,7 @@ option(LIBLCF_UPDATE_MIMEDB "Whether to run update-mime-database after install (
+ option(LIBLCF_ENABLE_TOOLS "Whether to build the tools (default: ON)" ON)
+ option(LIBLCF_ENABLE_TESTS "Whetner to build the unit tests (default: ON)" ON)
+ option(LIBLCF_ENABLE_BENCHMARKS "Whether to build the benchmarks (default: OFF)" OFF)
++option(LIBLCF_FOR_SERVER "Compile only the source files needed for the server (default: OFF)" OFF)
+ 
+ set(CMAKE_DEBUG_POSTFIX "d" CACHE STRING "Override CMAKE_DEBUG_POSTFIX.")
+ 
+@@ -294,7 +295,15 @@ set(LCF_HEADERS
+ 	src/lcf/third_party/string_view.h
+ )
+ 
++if(LIBLCF_FOR_SERVER)
++set(LCF_SOURCES_SERVER
++	src/ini.cpp
++	src/inireader.cpp
++)
++add_library(lcf ${LCF_SOURCES_SERVER} ${LCF_HEADERS})
++else()
+ add_library(lcf ${LCF_SOURCES} ${LCF_HEADERS})
++endif()
+ 
+ # IDE source grouping
+ foreach(SG LDB LMT LMU LSD RPG THIRD_PARTY)
