@@ -30,8 +30,10 @@ public:
 
 	virtual ~Packet() = default;
 	virtual std::string ToBytes() const;
+	virtual void FromStream(std::istream& is);
 
 	uint8_t GetType() const { return packet_type; }
+	bool Encrypted() const { return !packet_crypt.empty(); }
 
 protected:
 	template<typename T>
@@ -59,8 +61,13 @@ private:
 	static void Write(std::ostream& os, std::string_view val) { os << SerializeString16(val); }
 
 	virtual void Serialize(std::ostream& os) const {}
+	virtual void Serialize2(std::ostream& os) const {}
+	virtual void DeSerialize(std::istream& is) {}
+	virtual void DeSerialize2(std::istream& is) {}
 
 	uint8_t packet_type{0};
+
+	std::string packet_crypt;
 };
 
 }

@@ -43,12 +43,12 @@ public:
 	void SendPacket(const Packet& p);
 
 	template<typename M, typename = std::enable_if_t<std::conjunction_v<
-		std::is_convertible<M, Packet>,
-		std::is_constructible<M, std::istream&>
+		std::is_convertible<M, Packet>
 	>>>
 	void RegisterHandler(std::function<void (M&)> h) {
 		handlers.emplace(M::packet_type, [this, h](std::istream& is) {
-			M pack {is};
+			M pack;
+			pack.FromStream(is);
 			std::invoke(h, pack);
 		});
 	}

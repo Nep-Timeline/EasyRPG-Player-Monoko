@@ -232,11 +232,6 @@ class ServerSideClient {
 				}
 			}
 		});
-		connection.RegisterHandler<TeleportPacket>([this](TeleportPacket& p) {
-			state.move.x = p.x;
-			state.move.y = p.y;
-			SendLocalAsync(state.move);
-		});
 		connection.RegisterHandler<MovePacket>([this](MovePacket& p) {
 			p.id = id;
 			state.move = p;

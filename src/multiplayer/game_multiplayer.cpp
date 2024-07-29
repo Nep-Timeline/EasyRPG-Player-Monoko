@@ -920,7 +920,7 @@ void Game_Multiplayer::MainPlayerTeleported(int map_id, int x, int y) {
 		virtual_3d_entered = false;
 	/* Sometimes the starting position is not as expected,
 	 *  but is moved through teleportation again */
-	connection.SendPacketAsync<TeleportPacket>(x, y);
+	connection.SendPacketAsync<MovePacket>(0, x, y);
 }
 
 void Game_Multiplayer::MainPlayerTriggeredEvent(int event_id, bool action) {

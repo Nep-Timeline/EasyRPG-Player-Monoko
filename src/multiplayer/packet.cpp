@@ -25,7 +25,13 @@ std::string Packet::ToBytes() const {
 	std::ostringstream oss(std::ios_base::binary);
 	WritePartial(oss, GetType());
 	Serialize(oss);
+	Serialize2(oss);
 	// just to see boundaries from hexdump
 	WritePartial(oss, (uint16_t)0x2828);
 	return SerializeString16(oss.str());
+}
+
+void Packet::FromStream(std::istream& is) {
+	DeSerialize(is);
+	DeSerialize2(is);
 }
