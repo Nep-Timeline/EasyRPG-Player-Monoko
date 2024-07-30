@@ -715,6 +715,8 @@ void Game_Multiplayer::SetConfig(const Game_ConfigMultiplayer& _cfg) {
 #endif
 	connection.SetConfig(&cfg);
 
+	connection.SetCryptKey("123");
+
 	// Heartbeat
 	if (!cfg.no_heartbeats.Get()) {
 		connection.RegisterHandler<HeartbeatPacket>([](HeartbeatPacket& p) {});
@@ -784,8 +786,9 @@ std::string Game_Multiplayer::GetChatName() {
 }
 
 void Game_Multiplayer::SendChatMessage(int visibility, std::string message, int crypt_key_hash) {
-	auto p = ChatPacket(visibility, std::move(message));
+	auto p = ChatPacket(visibility, message, ToString(Main_Data::game_system->GetSystemName()));
 	p.crypt_key_hash = crypt_key_hash;
+	p.name = cfg.client_chat_name.Get() != "" ? cfg.client_chat_name.Get() : "<unknown>";
 	connection.SendPacket(p);
 }
 
@@ -948,7 +951,7 @@ void Game_Multiplayer::VariableSet(int var_id, int value) {
 void Game_Multiplayer::PictureShown(int pic_id, Game_Pictures::ShowParams& params) {
 	if (IsPictureSynced(pic_id, params)) {
 		auto& p = Main_Data::game_player;
-		connection.SendPacketAsync<ShowPicturePacket>(pic_id, params,
+		connection.SendPacketAsync<ShowPicturePacket>(pic_id, pic_id, params,
 			Game_Map::GetPositionX(), Game_Map::GetPositionY(),
 			p->GetPanX(), p->GetPanY());
 	}
@@ -957,7 +960,7 @@ void Game_Multiplayer::PictureShown(int pic_id, Game_Pictures::ShowParams& param
 void Game_Multiplayer::PictureMoved(int pic_id, Game_Pictures::MoveParams& params) {
 	if (sync_picture_cache.count(pic_id) && sync_picture_cache[pic_id]) {
 		auto& p = Main_Data::game_player;
-		connection.SendPacketAsync<MovePicturePacket>(pic_id, params,
+		connection.SendPacketAsync<MovePicturePacket>(pic_id, pic_id, params,
 			Game_Map::GetPositionX(), Game_Map::GetPositionY(),
 			p->GetPanX(), p->GetPanY());
 	}
@@ -966,7 +969,7 @@ void Game_Multiplayer::PictureMoved(int pic_id, Game_Pictures::MoveParams& param
 void Game_Multiplayer::PictureErased(int pic_id) {
 	if (sync_picture_cache.count(pic_id) && sync_picture_cache[pic_id]) {
 		sync_picture_cache.erase(pic_id);
-		connection.SendPacketAsync<ErasePicturePacket>(pic_id);
+		connection.SendPacketAsync<ErasePicturePacket>(pic_id, pic_id);
 	}
 }
 

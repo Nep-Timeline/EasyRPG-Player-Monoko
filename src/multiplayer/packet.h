@@ -29,11 +29,14 @@ public:
 	Packet(uint8_t _packet_type) : packet_type(_packet_type) {}
 
 	virtual ~Packet() = default;
-	virtual std::string ToBytes() const;
-	virtual void FromStream(std::istream& is);
+	virtual std::string ToBytes(std::string_view crypt_key = "") const;
+	virtual void FromStream(std::istream& is, std::string_view crypt_key);
 
 	uint8_t GetType() const { return packet_type; }
 	bool Encrypted() const { return !packet_crypt.empty(); }
+
+	virtual void Discard() { is_available = false; }
+	virtual bool IsAvailable() const { return is_available; }
 
 protected:
 	template<typename T>
@@ -46,6 +49,9 @@ protected:
 		Write(os, val);
 		WritePartial(os, args...);
 	}
+
+	std::string GetPacketCrypt() const { return packet_crypt; }
+	void SetPacketCrypt(std::string data) { packet_crypt = data; }
 
 private:
 	static void Write(std::ostream& os, bool val) { WriteU8(os, val); }
@@ -68,6 +74,8 @@ private:
 	uint8_t packet_type{0};
 
 	std::string packet_crypt;
+
+	bool is_available = true;
 };
 
 }

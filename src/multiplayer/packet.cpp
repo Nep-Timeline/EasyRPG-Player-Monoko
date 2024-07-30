@@ -19,19 +19,67 @@
 #include "packet.h"
 #include <sstream>
 
+#ifndef SERVER
+#  include "util/crypto.h"
+#endif
+
 using namespace Multiplayer;
 
-std::string Packet::ToBytes() const {
+std::string Packet::ToBytes(std::string_view crypt_key) const {
 	std::ostringstream oss(std::ios_base::binary);
+	WritePartial(oss, (uint16_t)0x2828); // just to see boundaries from hexdump
 	WritePartial(oss, GetType());
 	Serialize(oss);
-	Serialize2(oss);
-	// just to see boundaries from hexdump
-	WritePartial(oss, (uint16_t)0x2828);
+
+	if (Encrypted()) {
+		WritePartial(oss, (uint8_t)true); // encrypted
+		WritePartial(oss, packet_crypt);
+	} else {
+		std::ostringstream oss2(std::ios_base::binary);
+		Serialize2(oss2);
+		std::string out2 = oss2.str();
+		if (out2.size() > 0) {
+			if (crypt_key.empty()) {
+				WritePartial(oss, (uint8_t)false); // not encrypted
+				WritePartial(oss, out2);
+			} else {
+#ifndef SERVER
+				WritePartial(oss, (uint8_t)true);
+				std::vector<char> cipher_data;
+				CryptoError err = CryptoEncryptText(crypt_key, out2, cipher_data);
+				if (err == CryptoError::CE_NO_ERROR) {
+					WritePartial(oss, std::string_view(cipher_data.data(), cipher_data.size()));
+				}
+#endif
+			}
+		} else {
+			WritePartial(oss, (uint8_t)false);
+		}
+	}
+
 	return SerializeString16(oss.str());
 }
 
-void Packet::FromStream(std::istream& is) {
+void Packet::FromStream(std::istream& is, std::string_view crypt_key) {
 	DeSerialize(is);
-	DeSerialize2(is);
+
+	if (ReadU8(is)) { // encrypted
+		if (crypt_key.empty()) {
+			packet_crypt = DeSerializeString16(is);
+		} else {
+#ifndef SERVER
+			std::string decrypted_data;
+			std::string encrypted_data = DeSerializeString16(is);
+			std::vector<char> cipher_data(encrypted_data.begin(), encrypted_data.end());
+			CryptoError err = CryptoDecryptText(crypt_key, cipher_data, decrypted_data);
+			if (err == CryptoError::CE_NO_ERROR) {
+				std::istringstream iss2(decrypted_data, std::ios_base::binary);
+				DeSerialize2(iss2);
+			}
+#endif
+		}
+	} else {
+		std::istringstream iss2(DeSerializeString16(is), std::ios_base::binary);
+		DeSerialize2(iss2);
+	}
 }

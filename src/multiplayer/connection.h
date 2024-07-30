@@ -48,7 +48,7 @@ public:
 	void RegisterHandler(std::function<void (M&)> h) {
 		handlers.emplace(M::packet_type, [this, h](std::istream& is) {
 			M pack;
-			pack.FromStream(is);
+			pack.FromStream(is, crypt_key);
 			std::invoke(h, pack);
 		});
 	}
@@ -63,6 +63,9 @@ public:
 	using SystemMessageHandler = std::function<void (Connection&)>;
 	void RegisterSystemHandler(SystemMessage m, SystemMessageHandler h);
 
+	std::string GetCryptKey();
+	void SetCryptKey(std::string key);
+
 protected:
 	virtual void Open() = 0;
 	virtual void Close() = 0;
@@ -74,8 +77,18 @@ protected:
 private:
 	std::map<uint8_t, std::function<void (std::istream&)>> handlers;
 	SystemMessageHandler sys_handlers[static_cast<size_t>(SystemMessage::_PLACEHOLDER)];
+
+	std::string crypt_key;
 };
 
+inline std::string Connection::GetCryptKey() {
+	return crypt_key;
 }
+
+inline void Connection::SetCryptKey(std::string key) {
+	crypt_key = std::move(key);
+}
+
+} // end of namespace
 
 #endif

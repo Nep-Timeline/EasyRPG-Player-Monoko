@@ -300,7 +300,7 @@ void ClientConnection::FlushQueue() {
 			const auto& e = m_queue.front();
 			if ((e->GetType() != Messages::RoomPacket::packet_type) == include)
 				break;
-			std::string data = e->ToBytes();
+			std::string data = e->ToBytes(Connection::GetCryptKey());
 			if (bulk.size() + data.size() > QUEUE_MAX_BULK_SIZE) {
 				Send(bulk);
 				bulk.clear();

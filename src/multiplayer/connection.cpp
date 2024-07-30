@@ -48,13 +48,14 @@ void Connection::ParseAddress(std::string address, std::string& host, uint16_t& 
 }
 
 void Connection::SendPacket(const Packet& p) {
-	Send(p.ToBytes());
+	Send(p.ToBytes(crypt_key));
 }
 
 void Connection::Dispatch(const std::string_view data) {
 	std::istringstream iss(std::string(data), std::ios_base::binary);
 	while (!iss.eof()) {
 		std::istringstream pkt_iss(DeSerializeString16(iss));
+		ReadU16(pkt_iss); // skip unused bytes
 		auto packet_type = ReadU8(pkt_iss);
 		auto it = handlers.find(packet_type);
 		if (it != handlers.end()) {
@@ -62,7 +63,6 @@ void Connection::Dispatch(const std::string_view data) {
 		} else {
 			break;
 		}
-		ReadU16(pkt_iss); // skip unused bytes
 		iss.peek(); // check eof
 	}
 }

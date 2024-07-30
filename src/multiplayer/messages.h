@@ -156,27 +156,32 @@ namespace Messages {
 	public:
 		constexpr static uint8_t packet_type{ PT_CHAT };
 		ChatPacket() : PlayerPacket(packet_type) {}
-		ChatPacket(uint8_t _v, std::string _m) // C2S
-			: PlayerPacket(packet_type), visibility(_v), message(std::move(_m)) {}
+		ChatPacket(uint8_t _v, std::string _m, std::string _s) // C2S
+			: PlayerPacket(packet_type), visibility(_v), message(std::move(_m)), sys_name(std::move(_s)) {}
 		ChatPacket(uint16_t _id, uint8_t _t, uint8_t _v, uint16_t _r, std::string _n, std::string _m) // S2C
 			: PlayerPacket(packet_type, _id), type(_t), visibility(_v),
 			room_id(_r), name(std::move(_n)), message(std::move(_m)) {}
 		uint8_t type{0}; // 0: info, 1: chat
 		uint8_t visibility{0};
-		uint16_t room_id{0};
 		uint32_t crypt_key_hash{0};
+		uint16_t room_id{0};
 		std::string name;
 		std::string message;
 		std::string sys_name;
 	private:
-		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
-		void Serialize2(std::ostream& os) const override {
-			WritePartial(os, type, visibility, room_id, crypt_key_hash, name, message, sys_name);
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, type, visibility, crypt_key_hash);
 		}
-		void DeSerialize(std::istream& is) override { PlayerPacket::DeSerialize(is); }
+		void Serialize2(std::ostream& os) const override {
+			WritePartial(os, room_id, name, message, sys_name);
+		}
+		void DeSerialize(std::istream& is) override {
+			PlayerPacket::DeSerialize(is);
+			type = ReadU8(is), visibility = ReadU8(is), crypt_key_hash = ReadU32(is);
+		}
 		void DeSerialize2(std::istream& is) override {
-			type = ReadU8(is), visibility = ReadU8(is);
-			room_id = ReadU16(is), crypt_key_hash = ReadU32(is);
+			room_id = ReadU16(is);
 			name = DeSerializeString16(is);
 			message = DeSerializeString16(is);
 			sys_name = DeSerializeString16(is);
@@ -329,14 +334,6 @@ namespace Messages {
 			: FlashPacket(packet_type, _r, _g, _b, _p, _f) {}
 		RepeatingFlashPacket(uint16_t _id, uint8_t _r, uint8_t _g, uint8_t _b, uint8_t _p, uint8_t _f) // S2C
 			: FlashPacket(packet_type, _id, _r, _g, _b, _p, _f) {}
-		void Discard() {
-			is_available = false;
-		}
-		bool IsAvailable() const {
-			return is_available;
-		}
-	private:
-		bool is_available = true;
 	};
 
 	/**
@@ -428,26 +425,34 @@ namespace Messages {
 	public:
 		// Skip Game_Pictures::Params&, reference cannot be assigned
 		PicturePacket& operator=(const PicturePacket& o) {
+			Packet::SetPacketCrypt(o.GetPacketCrypt());
 			id = o.id;
-			pic_id = o.pic_id;
-			map_x = o.map_x; map_y = o.map_y;
-			pan_x = o.pan_x; pan_y = o.pan_y;
+			pic_id_hash = o.pic_id_hash;
+			if (!Packet::Encrypted()) {
+				pic_id = o.pic_id;
+				map_x = o.map_x; map_y = o.map_y;
+				pan_x = o.pan_x; pan_y = o.pan_y;
+			}
 			return *this;
 		}
+		uint32_t pic_id_hash{0};
 		uint16_t pic_id{0};
 		int16_t map_x{0}, map_y{0};
 		int16_t pan_x{0}, pan_y{0};
 		Game_Pictures::Params& params;
 	protected:
-		PicturePacket(uint8_t _packet_type, uint16_t _pic_id, Game_Pictures::Params& _p, // C2S
+		PicturePacket(uint8_t _packet_type, uint32_t _pidh, uint16_t _pic_id, Game_Pictures::Params& _p, // C2S
 				int16_t _mx, int16_t _my, int16_t _panx, int16_t _pany)
-			: PlayerPacket(_packet_type), pic_id(_pic_id), params(_p),
+			: PlayerPacket(_packet_type), pic_id_hash(_pidh), pic_id(_pic_id), params(_p),
 			map_x(_mx), map_y(_my), pan_x(_panx), pan_y(_pany) {}
-		PicturePacket(uint8_t _packet_type, uint16_t _id, uint16_t _pic_id, Game_Pictures::Params& _p, // S2C
+		PicturePacket(uint8_t _packet_type, uint16_t _id, uint32_t _pidh, uint16_t _pic_id, Game_Pictures::Params& _p, // S2C
 				int16_t _mx, int16_t _my, int16_t _panx, int16_t _pany)
-			: PlayerPacket(_packet_type, _id), pic_id(_pic_id), params(_p),
+			: PlayerPacket(_packet_type, _id), pic_id_hash(_pidh), pic_id(_pic_id), params(_p),
 			map_x(_mx), map_y(_my), pan_x(_panx), pan_y(_pany) {}
-		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, pic_id_hash);
+		}
 		void Serialize2(std::ostream& os) const override {
 			WritePartial(os, pic_id, map_x, map_y, pan_x, pan_y,
 				(int16_t)params.position_x, (int16_t)params.position_y,
@@ -455,7 +460,10 @@ namespace Messages {
 				(uint8_t)params.red, (uint8_t)params.green, (uint8_t)params.blue, (uint8_t)params.saturation,
 				(int16_t)params.effect_mode, (int16_t)params.effect_power);
 		}
-		void DeSerialize(std::istream& is) override { PlayerPacket::DeSerialize(is); }
+		void DeSerialize(std::istream& is) override {
+			PlayerPacket::DeSerialize(is);
+			pic_id_hash = ReadU32(is);
+		}
 		void DeSerialize2(std::istream& is) override {
 			pic_id = ReadU16(is);
 			map_x = ReadS16(is), map_y = ReadS16(is);
@@ -476,13 +484,13 @@ namespace Messages {
 	class ShowPicturePacket : public PicturePacket {
 	public:
 		constexpr static uint8_t packet_type{ PT_SHOW_PICTURE };
-		ShowPicturePacket() : PicturePacket(packet_type, 0, params, 0, 0, 0, 0) {}
-		ShowPicturePacket(uint16_t _pid, Game_Pictures::ShowParams _p, // C2S
+		ShowPicturePacket() : PicturePacket(packet_type, 0, 0, params, 0, 0, 0, 0) {}
+		ShowPicturePacket(uint32_t _pidh, uint16_t _pid, Game_Pictures::ShowParams _p, // C2S
 				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
-			: PicturePacket(packet_type, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
-		ShowPicturePacket(uint16_t _id, uint16_t _pid, Game_Pictures::ShowParams _p, // S2C
+			: PicturePacket(packet_type, _pidh, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+		ShowPicturePacket(uint16_t _id, uint32_t _pidh, uint16_t _pid, Game_Pictures::ShowParams _p, // S2C
 				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
-			: PicturePacket(packet_type, _id, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+			: PicturePacket(packet_type, _id, _pidh, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
 		Game_Pictures::ShowParams params;
 	private:
 		void Serialize(std::ostream& os) const override { PicturePacket::Serialize(os); }
@@ -512,13 +520,13 @@ namespace Messages {
 	class MovePicturePacket : public PicturePacket {
 	public:
 		constexpr static uint8_t packet_type{ PT_MOVE_PICTRUE };
-		MovePicturePacket() : PicturePacket(packet_type, 0, params, 0, 0, 0, 0) {}
-		MovePicturePacket(uint16_t _pid, Game_Pictures::MoveParams _p, // C2S
+		MovePicturePacket() : PicturePacket(packet_type, 0, 0, params, 0, 0, 0, 0) {}
+		MovePicturePacket(uint32_t _pidh, uint16_t _pid, Game_Pictures::MoveParams _p, // C2S
 				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
-			: PicturePacket(packet_type, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
-		MovePicturePacket(uint16_t _id, uint16_t _pid, Game_Pictures::MoveParams _p, // S2C
+			: PicturePacket(packet_type, _pidh, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+		MovePicturePacket(uint16_t _id, uint32_t _pidh, uint16_t _pid, Game_Pictures::MoveParams _p, // S2C
 				int16_t _mx, int16_t _my, int16_t _px, int16_t _py)
-			: PicturePacket(packet_type, _id, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
+			: PicturePacket(packet_type, _id, _pidh, _pid, params, _mx, _my, _px, _py), params(std::move(_p)) {}
 		Game_Pictures::MoveParams params;
 	private:
 		void Serialize(std::ostream& os) const override { PicturePacket::Serialize(os); }
@@ -547,13 +555,22 @@ namespace Messages {
 	public:
 		constexpr static uint8_t packet_type{ PT_ERASE_PICTURE };
 		ErasePicturePacket() : PlayerPacket(packet_type) {}
-		ErasePicturePacket(uint16_t _pid) : PlayerPacket(packet_type), pic_id(_pid) {} // C2S
-		ErasePicturePacket(uint16_t _id, uint16_t _pid) : PlayerPacket(packet_type, _id), pic_id(_pid) {} // S2C
+		ErasePicturePacket(uint32_t _pidh, uint16_t _pid) // C2S
+			: PlayerPacket(packet_type), pic_id_hash(_pidh), pic_id(_pid) {}
+		ErasePicturePacket(uint16_t _id, uint32_t _pidh, uint16_t _pid) // S2C
+			: PlayerPacket(packet_type, _id), pic_id_hash(_pidh), pic_id(_pid) {}
+		uint32_t pic_id_hash{0};
 		uint16_t pic_id{0};
 	private:
-		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
+		void Serialize(std::ostream& os) const override {
+			PlayerPacket::Serialize(os);
+			WritePartial(os, pic_id_hash);
+		}
 		void Serialize2(std::ostream& os) const override { WritePartial(os, pic_id); }
-		void DeSerialize(std::istream& is) override { PlayerPacket::DeSerialize(is); }
+		void DeSerialize(std::istream& is) override {
+			PlayerPacket::DeSerialize(is);
+			pic_id_hash = ReadU32(is);
+		}
 		void DeSerialize2(std::istream& is) override { pic_id = ReadU16(is); }
 	};
 

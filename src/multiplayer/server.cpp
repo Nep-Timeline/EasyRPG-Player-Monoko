@@ -107,9 +107,9 @@ class ServerSideClient {
 
 	int room_id{0};
 	int chat_crypt_key_hash{0};
-	std::string name{""};
 
 	struct State {
+		NamePacket name;
 		MovePacket move;
 		FacingPacket facing;
 		SpeedPacket speed;
@@ -117,18 +117,18 @@ class ServerSideClient {
 		RepeatingFlashPacket repeating_flash;
 		HiddenPacket hidden;
 		SystemPacket system;
-		std::map<int, ShowPicturePacket> pictures;
+		std::map<uint32_t, ShowPicturePacket> pictures;
 	};
 	State state;
 
 	// Some maps won't restore their actions. Reset all here,
 	//  then wait SendSelfRoomInfoAsync() to be called by clients
 	void ResetState() {
-		state.facing.facing = 0;
-		state.speed.speed = 0;
-		state.sprite.index = -1;
+		state.facing.Discard();
+		state.speed.Discard();
+		state.sprite.Discard();
 		state.repeating_flash.Discard(); // important
-		state.hidden.is_hidden = false;
+		state.hidden.Discard();
 		state.pictures.clear(); // important
 	};
 
@@ -138,18 +138,19 @@ class ServerSideClient {
 				return;
 			SendSelfAsync(JoinPacket(client.id));
 			SendSelfAsync(client.state.move);
-			SendSelfAsync(client.state.facing);
-			if (client.state.speed.speed != 0)
+			if (client.state.facing.IsAvailable())
+				SendSelfAsync(client.state.facing);
+			if (client.state.speed.IsAvailable())
 				SendSelfAsync(client.state.speed);
-			if (client.name != "")
-				SendSelfAsync(NamePacket(client.id, client.name));
-			if (client.state.sprite.index != -1)
+			if (client.state.name.name != "" || client.state.name.Encrypted())
+				SendSelfAsync(client.state.name);
+			if (client.state.sprite.IsAvailable())
 				SendSelfAsync(client.state.sprite);
 			if (client.state.repeating_flash.IsAvailable())
 				SendSelfAsync(client.state.repeating_flash);
-			if (client.state.hidden.is_hidden)
+			if (client.state.hidden.IsAvailable())
 				SendSelfAsync(client.state.hidden);
-			if (client.state.system.name != "")
+			if (client.state.system.name != "" || client.state.system.Encrypted())
 				SendSelfAsync(client.state.system);
 			for (const auto& it : client.state.pictures) {
 				SendSelfAsync(it.second);
@@ -175,8 +176,8 @@ class ServerSideClient {
 			if (join_sent) {
 				Leave();
 				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
-					std::to_string(id) + (name == "" ? "" : " " + name) + " left the server."));
-				OutputMt::Info("S: room_id={} name={} left the server", room_id, name);
+					std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " left the server."));
+				OutputMt::Info("S: room_id={} name={} left the server", room_id, state.name.name);
 			}
 			server->DeleteClient(id);
 		});
@@ -189,16 +190,17 @@ class ServerSideClient {
 			SendSelfAsync(p);
 			SendSelfRoomInfoAsync();
 			SendLocalAsync(JoinPacket(id));
-			if (name != "")
-				SendLocalAsync(NamePacket(id, name));
+			if (state.name.name != "" || state.name.Encrypted())
+				SendLocalAsync(state.name);
 			// ... (Waiting for the follow-up syncs of SendBasicData() from the client)
 		});
 		connection.RegisterHandler<NamePacket>([this](NamePacket& p) {
-			name = std::move(p.name);
+			p.id = id;
+			state.name = p;
 			if (!join_sent) {
 				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
-					std::to_string(id) + (name == "" ? "" : " " + name) + " joined the server."));
-				OutputMt::Info("S: room_id={} name={} joined the server", room_id, name);
+					std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " joined the server."));
+				OutputMt::Info("S: room_id={} name={} joined the server", room_id, state.name.name);
 
 				SendSelfAsync(ConfigPacket(0, server->GetConfig().server_picture_names.Get()));
 				SendSelfAsync(ConfigPacket(1, server->GetConfig().server_picture_prefixes.Get()));
@@ -210,16 +212,19 @@ class ServerSideClient {
 		connection.RegisterHandler<ChatPacket>([this](ChatPacket& p) {
 			p.id = id;
 			p.type = 1; // 1 = chat
-			p.room_id = room_id;
-			p.name = name == "" ? "<unknown>" : name;
-			p.sys_name = state.system.name;
+			if (!p.Encrypted()) {
+				p.room_id = room_id;
+				p.name = state.name.name != "" ? state.name.name : "<unknown>";
+			}
 			VisibilityType visibility = static_cast<VisibilityType>(p.visibility);
 			if (visibility == CV_LOCAL) {
 				SendLocalChat(p);
-				OutputMt::Info("S: Chat: {} [LOCAL, {}]: {}", p.name, p.room_id, p.message);
+				if (!p.Encrypted())
+					OutputMt::Info("S: Chat: {} [LOCAL, {}]: {}", p.name, p.room_id, p.message);
 			} else if (visibility == CV_GLOBAL) {
 				SendGlobalChat(p);
-				OutputMt::Info("S: Chat: {} [GLOBAL, {}]: {}", p.name, p.room_id, p.message);
+				if (!p.Encrypted())
+					OutputMt::Info("S: Chat: {} [GLOBAL, {}]: {}", p.name, p.room_id, p.message);
 			} else if (visibility == CV_CRYPT) {
 				// use "crypt_key_hash != 0" to distinguish whether to set or send
 				if (p.crypt_key_hash != 0) { // set
@@ -287,22 +292,22 @@ class ServerSideClient {
 		connection.RegisterHandler<ShowPicturePacket>([this](ShowPicturePacket& p) {
 			p.id = id;
 			if (state.pictures.size() < 200)
-				state.pictures[p.pic_id] = p;
+				state.pictures[p.pic_id_hash] = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<MovePicturePacket>([this](MovePicturePacket& p) {
 			p.id = id;
-			const auto& it = state.pictures.find(p.pic_id);
+			const auto& it = state.pictures.find(p.pic_id_hash);
 			if(it != state.pictures.end()) {
 				PicturePacket& pic = it->second;
-				pic.params = p.params;
+				if (!p.Encrypted()) pic.params = p.params;
 				pic = p;
 			}
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<ErasePicturePacket>([this](ErasePicturePacket& p) {
 			p.id = id;
-			state.pictures.erase(p.pic_id);
+			state.pictures.erase(p.pic_id_hash);
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<ShowPlayerBattleAnimPacket>([this](ShowPlayerBattleAnimPacket& p) {
