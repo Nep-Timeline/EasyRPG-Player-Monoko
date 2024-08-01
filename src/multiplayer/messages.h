@@ -56,7 +56,6 @@ namespace Messages {
 		PT_HIDDEN = 0x10, PT_SYSTEM = 0x11, PT_SOUND_EFFECT = 0x12,
 		PT_SHOW_PICTURE = 0x13, PT_MOVE_PICTRUE = 0x14, PT_ERASE_PICTURE = 0x15,
 		PT_SHOW_PLAYER_BATTLE_ANIM = 0x16,
-		PT_CONFIG = 0x17,
 	};
 
 	using Packet = Multiplayer::Packet;
@@ -592,23 +591,6 @@ namespace Messages {
 		void Serialize2(std::ostream& os) const override { WritePartial(os, anim_id); }
 		void DeSerialize(std::istream& is) override { PlayerPacket::DeSerialize(is); }
 		void DeSerialize2(std::istream& is) override { anim_id = ReadU16(is); }
-	};
-
-	/**
-	 * Config
-	 */
-
-	class ConfigPacket : public Packet {
-	public:
-		constexpr static uint8_t packet_type{ PT_CONFIG };
-		ConfigPacket() : Packet(packet_type) {}
-		ConfigPacket(uint8_t _type, std::string _config) // S2C
-			: Packet(packet_type), type(_type), config(std::move(_config)) {}
-		uint8_t type{0}; // 0: picture_names, 1: picture_prefixes, 2: virtual_3d
-		std::string config;
-	private:
-		void Serialize(std::ostream& os) const override { WritePartial(os, type, config); }
-		void DeSerialize(std::istream& is) override { type = ReadU8(is), config = DeSerializeString16(is); }
 	};
 }
 

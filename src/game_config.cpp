@@ -455,9 +455,6 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
 	multiplayer.server_bind_address.FromIni(ini);
 	multiplayer.server_bind_address_2.FromIni(ini);
 	multiplayer.server_max_users.FromIni(ini);
-	multiplayer.server_picture_names.FromIni(ini);
-	multiplayer.server_picture_prefixes.FromIni(ini);
-	multiplayer.server_virtual_3d_maps.FromIni(ini);
 	multiplayer.client_auto_connect.FromIni(ini);
 	multiplayer.client_remote_address.FromIni(ini);
 	multiplayer.client_socks5_address.FromIni(ini);
@@ -553,9 +550,6 @@ void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
 	multiplayer.server_bind_address.ToIni(os);
 	multiplayer.server_bind_address_2.ToIni(os);
 	multiplayer.server_max_users.ToIni(os);
-	multiplayer.server_picture_names.ToIni(os);
-	multiplayer.server_picture_prefixes.ToIni(os);
-	multiplayer.server_virtual_3d_maps.ToIni(os);
 	multiplayer.client_auto_connect.ToIni(os);
 	multiplayer.client_remote_address.ToIni(os);
 	multiplayer.client_socks5_address.ToIni(os);

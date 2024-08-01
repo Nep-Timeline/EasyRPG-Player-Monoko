@@ -50,6 +50,10 @@
 #include "output_mt.h"
 #include "util/strfnd.h"
 
+#define PICOJSON_USE_LOCALE 0
+#define PICOJSON_ASSERT(e) do { if (! (e)) assert(false && #e); } while (0)
+#include "../external/picojson.h"
+
 #ifndef EMSCRIPTEN
 #  include "server.h"
 #else
@@ -66,7 +70,10 @@ namespace {
 	const int picture_limit = 50;
 
 	// Config
+	std::shared_ptr<int> multiplayer_json_request_id;
+	std::string game_name;
 	Game_ConfigMultiplayer cfg;
+	int update_counter = 0;
 	struct {
 		bool enable_sounds{ true };
 		bool mute_audio{ false };
@@ -143,6 +150,59 @@ int GetPlayerPictureId(int player_id, int picture_id) {
 	//  indexing in Game_Pictures::GetPicture(), it will be -1
 	return ((player_id - 1) % picture_client_limit + 1) * pic_limit
 			+ ((picture_id - 1) % pic_limit + 1);
+}
+
+void Setup() {
+	auto LoadTextConfig = [&]() {
+		Filesystem_Stream::InputStream is = FileFinder::OpenText("multiplayer.json");
+		picojson::value v;
+		picojson::parse(v, is);
+		if (!v.is<picojson::object>()) return;
+		std::map cfg = v.get<picojson::object>();
+		if (cfg.find("game_name") != cfg.end() && cfg["game_name"].is<std::string>()) {
+			game_name = cfg["game_name"].to_str();
+		}
+		if (cfg.find("picture_names") != cfg.end() && cfg["picture_names"].is<picojson::array>()) {
+			for (const auto& value : cfg["picture_names"].get<picojson::array>()) {
+				if (!value.is<std::string>()) break;
+				global_sync_picture_names.emplace_back(value.to_str());
+			}
+		}
+		if (cfg.find("picture_prefixes") != cfg.end() && cfg["picture_prefixes"].is<picojson::array>()) {
+			for (const auto& value : cfg["picture_prefixes"].get<picojson::array>()) {
+				if (!value.is<std::string>()) break;
+				global_sync_picture_prefixes.emplace_back(value.to_str());
+			}
+		}
+		if (cfg.find("virtual_3d_maps") != cfg.end() && cfg["virtual_3d_maps"].is<picojson::array>()) {
+			for (const auto& value : cfg["virtual_3d_maps"].get<picojson::array>()) {
+				if (!value.is<picojson::object>()) continue;
+				std::map obj = value.get<picojson::object>();
+				int map_id{-1}, event_id{-1}, terrain_id{-1}, switch_id{-1};
+				if (obj.find("map_id") != obj.end() && obj["map_id"].is<double>())
+					map_id = obj["map_id"].get<double>();
+				if (obj.find("event_id") != obj.end() && obj["event_id"].is<double>())
+					event_id = obj["event_id"].get<double>();
+				if (obj.find("terrain_id") != obj.end() && obj["terrain_id"].is<double>())
+					terrain_id = obj["terrain_id"].get<double>();
+				if (obj.find("switch_id") != obj.end() && obj["switch_id"].is<double>())
+					switch_id = obj["switch_id"].get<double>();
+				virtual_3d_map_configs[map_id] = { event_id, terrain_id, switch_id };
+			}
+		}
+	};
+	if (Player::game_config.engine != Player::EngineNone) {
+#ifndef EMSCRIPTEN
+		LoadTextConfig();
+#else
+		auto* request = AsyncHandler::RequestFile("Text", "multiplayer");
+		multiplayer_json_request_id = request->Bind([&](FileRequestResult* result) {
+			if (result->success) LoadTextConfig();
+		});
+		request->SetImportantFile(true); // Continue the scene after waiting
+		request->Start();
+#endif
+	}
 }
 
 /**
@@ -400,37 +460,6 @@ void InitConnection() {
 #endif
 	};
 
-	connection.RegisterHandler<ConfigPacket>([](ConfigPacket& p) {
-		if (p.type == 0) {
-			Strfnd fnd(p.config);
-			while (!fnd.at_end()) {
-				if (global_sync_picture_names.size() < 500)
-					global_sync_picture_names.emplace_back(Utils::UnescapeString(fnd.next_esc(",")));
-				else
-					break;
-			}
-		} else if (p.type == 1) {
-			Strfnd fnd(p.config);
-			while (!fnd.at_end()) {
-				if (global_sync_picture_prefixes.size() < 500)
-					global_sync_picture_prefixes.emplace_back(Utils::UnescapeString(fnd.next_esc(",")));
-				else
-					break;
-			}
-		} else if (p.type == 2) {
-			Strfnd map_cfg_fnd(p.config);
-			while (!map_cfg_fnd.at_end()) {
-				std::string map_cfg = map_cfg_fnd.next("^");
-				Strfnd fnd(map_cfg);
-				int map_id = atoi(fnd.next(",").c_str());
-				int event_id = atoi(fnd.next(",").c_str());
-				int terrain_id = atoi(fnd.next(",").c_str());
-				int switch_id = atoi(fnd.next(",").c_str());
-				if (virtual_3d_map_configs.size() < 100)
-					virtual_3d_map_configs[map_id] = { event_id, terrain_id, switch_id };
-			}
-		}
-	});
 	connection.RegisterHandler<RoomPacket>([](RoomPacket& p) {
 		if (p.room_id != room_id) {
 			GMI().SwitchRoom(room_id); // wrong room, resend
@@ -1039,6 +1068,11 @@ int Game_Multiplayer::GetTerrainTag(int original_terrain_id, int x, int y) {
  */
 
 void Game_Multiplayer::Update() {
+	if (update_counter < 30) {
+		++update_counter;
+		if (update_counter == 30)
+			Setup();
+	}
 	if (active) {
 		connection.Receive();
 	}

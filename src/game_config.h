@@ -126,9 +126,6 @@ struct Game_ConfigMultiplayer {
 	StringConfigParam server_bind_address{ "", "", "Multiplayer", "ServerBindAddress", "[::]:6500" };
 	StringConfigParam server_bind_address_2{ "", "", "Multiplayer", "ServerBindAddress2", "" };
 	RangeConfigParam<int> server_max_users{ "", "", "Multiplayer", "ServerMaxUsers", 100, 0, 99999 };
-	StringConfigParam server_picture_names{ "", "", "Multiplayer", "ServerPictureNames", "" };
-	StringConfigParam server_picture_prefixes{ "", "", "Multiplayer", "ServerPicturePrefixes", "" };
-	StringConfigParam server_virtual_3d_maps{ "", "", "Multiplayer", "ServerVirtual3DMaps", "" };
 	BoolConfigParam client_auto_connect{ "", "", "Multiplayer", "ClientAutoConnect", false };
 	StringConfigParam client_remote_address{ "", "", "Multiplayer", "ClientRemoteAddress", "" };
 	StringConfigParam client_socks5_address{ "", "", "Multiplayer", "ClientSocks5Address", "" };

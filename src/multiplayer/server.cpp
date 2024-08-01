@@ -201,11 +201,6 @@ class ServerSideClient {
 				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
 					std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " joined the server."));
 				OutputMt::Info("S: room_id={} name={} joined the server", room_id, state.name.name);
-
-				SendSelfAsync(ConfigPacket(0, server->GetConfig().server_picture_names.Get()));
-				SendSelfAsync(ConfigPacket(1, server->GetConfig().server_picture_prefixes.Get()));
-				SendSelfAsync(ConfigPacket(2, server->GetConfig().server_virtual_3d_maps.Get()));
-
 				join_sent = true;
 			}
 		});
@@ -644,9 +639,6 @@ int main(int argc, char *argv[])
 		cfg.server_bind_address.FromIni(ini);
 		cfg.server_bind_address_2.FromIni(ini);
 		cfg.server_max_users.FromIni(ini);
-		cfg.server_picture_names.FromIni(ini);
-		cfg.server_picture_prefixes.FromIni(ini);
-		cfg.server_virtual_3d_maps.FromIni(ini);
 	}
 
 	Server().SetConfig(cfg);
