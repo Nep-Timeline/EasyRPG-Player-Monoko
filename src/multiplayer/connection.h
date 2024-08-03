@@ -63,6 +63,7 @@ public:
 	using SystemMessageHandler = std::function<void (Connection&)>;
 	void RegisterSystemHandler(SystemMessage m, SystemMessageHandler h);
 
+	bool Encrypted();
 	std::string GetCryptKey();
 	void SetCryptKey(std::string key);
 
@@ -80,6 +81,10 @@ private:
 
 	std::string crypt_key;
 };
+
+inline bool Connection::Encrypted() {
+	return !crypt_key.empty();
+}
 
 inline std::string Connection::GetCryptKey() {
 	return crypt_key;

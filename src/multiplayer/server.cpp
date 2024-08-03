@@ -102,11 +102,14 @@ class ServerSideClient {
 	ServerMain* server;
 
 	bool join_sent = false;
+	bool encrypted = false;
 	int id{0};
+	uint32_t client_hash{0};
 	ServerConnection connection;
 
 	int room_id{0};
-	int chat_crypt_key_hash{0};
+	uint32_t room_id_hash{0};
+	uint32_t chat_crypt_key_hash{0};
 
 	struct State {
 		NamePacket name;
@@ -134,7 +137,7 @@ class ServerSideClient {
 
 	void SendSelfRoomInfoAsync() {
 		server->ForEachClient([this](const ServerSideClient& client) {
-			if (client.id == id || client.room_id != room_id)
+			if (client.id == id || client.room_id_hash != room_id_hash)
 				return;
 			SendSelfAsync(JoinPacket(client.id));
 			SendSelfAsync(client.state.move);
@@ -175,18 +178,38 @@ class ServerSideClient {
 		connection.RegisterSystemHandler(SystemMessage::CLOSE, [this, Leave](Connection& _) {
 			if (join_sent) {
 				Leave();
-				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
-					std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " left the server."));
-				OutputMt::Info("S: room_id={} name={} left the server", room_id, state.name.name);
+				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"
+					+ std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " left the server."));
+				if (encrypted)
+					OutputMt::Info("S: id={} (encrypted) left the server", id);
+				else
+					OutputMt::Info("S: room_id={} id={} name={} left the server", room_id, id, state.name.name);
 			}
 			server->DeleteClient(id);
 		});
 
+		connection.RegisterHandler<ClientHelloPacket>([this](ClientHelloPacket& p) {
+			if (!join_sent) {
+				if (p.Encrypted()) encrypted = true;
+				client_hash = p.client_hash;
+				room_id = p.room_id;
+				state.name.id = id;
+				state.name.name = p.name;
+				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"
+					+ std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " joined the server."));
+				if (encrypted)
+					OutputMt::Info("S: id={} (encrypted) joined the server", id);
+				else
+					OutputMt::Info("S: room_id={} id={} name={} joined the server", room_id, id, state.name.name);
+				join_sent = true;
+			}
+		});
 		connection.RegisterHandler<RoomPacket>([this, Leave](RoomPacket& p) {
 			ResetState();
 			Leave();
 			// Join room
 			room_id = p.room_id;
+			room_id_hash = p.room_id_hash;
 			SendSelfAsync(p);
 			SendSelfRoomInfoAsync();
 			SendLocalAsync(JoinPacket(id));
@@ -197,20 +220,10 @@ class ServerSideClient {
 		connection.RegisterHandler<NamePacket>([this](NamePacket& p) {
 			p.id = id;
 			state.name = p;
-			if (!join_sent) {
-				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"+
-					std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " joined the server."));
-				OutputMt::Info("S: room_id={} name={} joined the server", room_id, state.name.name);
-				join_sent = true;
-			}
 		});
 		connection.RegisterHandler<ChatPacket>([this](ChatPacket& p) {
 			p.id = id;
 			p.type = 1; // 1 = chat
-			if (!p.Encrypted()) {
-				p.room_id = room_id;
-				p.name = state.name.name != "" ? state.name.name : "<unknown>";
-			}
 			VisibilityType visibility = static_cast<VisibilityType>(p.visibility);
 			if (visibility == CV_LOCAL) {
 				SendLocalChat(p);
@@ -225,8 +238,11 @@ class ServerSideClient {
 				if (p.crypt_key_hash != 0) { // set
 					// the chat_crypt_key_hash is used for searching
 					chat_crypt_key_hash = p.crypt_key_hash;
-					OutputMt::Info("S: Chat: {} [CRYPT, {}]: Update chat_crypt_key_hash: {}",
-						p.name, p.room_id, chat_crypt_key_hash);
+					if (p.Encrypted())
+						OutputMt::Info("S: Chat: id={} [CRYPT, ?]: Update chat_crypt_key_hash: {}", id, chat_crypt_key_hash);
+					else
+						OutputMt::Info("S: Chat: {} [CRYPT, {}]: Update chat_crypt_key_hash: {}",
+							p.name, p.room_id, chat_crypt_key_hash);
 				} else { // send
 					SendCryptChat(p);
 				}
@@ -322,7 +338,7 @@ class ServerSideClient {
 
 	template<typename T>
 	void SendLocalChat(const T& p) {
-		server->SendTo(id, room_id, CV_LOCAL, p.ToBytes(), true);
+		server->SendTo(id, room_id_hash, CV_LOCAL, p.ToBytes(), true);
 	}
 
 	template<typename T>
@@ -373,7 +389,7 @@ class ServerSideClient {
 		} else {
 			int to_id = 0;
 			if (visibility == Messages::CV_LOCAL) {
-				to_id = room_id;
+				to_id = room_id_hash;
 			}
 			server->SendTo(id, to_id, visibility, bulk);
 		}
@@ -433,8 +449,12 @@ public:
 		return id;
 	}
 
-	int GetRoomId() const {
-		return room_id;
+	int GetClientHash() const {
+		return client_hash;
+	}
+
+	int GetRoomIdHash() const {
+		return room_id_hash;
 	}
 
 	int GetChatCryptKeyHash() const {
@@ -510,10 +530,11 @@ void ServerMain::Start(bool wait_thread) {
 					if (!data_to_send->return_flag &&
 							data_to_send->from_id == to_client->GetId())
 						continue;
+					if (from_client && from_client->GetClientHash() != to_client->GetClientHash()) continue;
 					bool send_alt = data_to_send->return_flag;
 					// send to local
 					if (data_to_send->visibility == Messages::CV_LOCAL &&
-							data_to_send->to_id == to_client->GetRoomId()) {
+							data_to_send->to_id == to_client->GetRoomIdHash()) {
 						to_client->Send(data_to_send->data, send_alt);
 					// send to crypt
 					} else if (data_to_send->visibility == Messages::CV_CRYPT &&

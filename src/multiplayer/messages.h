@@ -47,15 +47,15 @@ namespace Messages {
 	};
 
 	enum PacketType : uint8_t {
-		PT_HEARTBEAT = 0x01,
-		PT_ROOM = 0x02, PT_JOIN = 0x03, PT_LEAVE = 0x04,
-		PT_NAME = 0x05, PT_CHAT = 0x06,
-		PT_MOVE = 0x07, PT_JUMP = 0x09,
-		PT_FACING= 0x0a, PT_SPEED = 0x0b, PT_SPRITE = 0x0c,
-		PT_FLASH = 0x0d, PT_REPEATING_FLASH = 0x0e, PT_REMOVE_REPEATING_FLASH = 0x0f,
-		PT_HIDDEN = 0x10, PT_SYSTEM = 0x11, PT_SOUND_EFFECT = 0x12,
-		PT_SHOW_PICTURE = 0x13, PT_MOVE_PICTRUE = 0x14, PT_ERASE_PICTURE = 0x15,
-		PT_SHOW_PLAYER_BATTLE_ANIM = 0x16,
+		PT_HEARTBEAT = 0x01, PT_CLIENT_HELLO = 0x02,
+		PT_ROOM = 0x22, PT_JOIN = 0x23, PT_LEAVE = 0x24,
+		PT_NAME = 0x25, PT_CHAT = 0x26,
+		PT_MOVE = 0x27, PT_JUMP = 0x28,
+		PT_FACING= 0x2a, PT_SPEED = 0x2b, PT_SPRITE = 0x2c,
+		PT_FLASH = 0x2d, PT_REPEATING_FLASH = 0x2e, PT_REMOVE_REPEATING_FLASH = 0x2f,
+		PT_HIDDEN = 0x30, PT_SYSTEM = 0x31, PT_SOUND_EFFECT = 0x32,
+		PT_SHOW_PICTURE = 0x33, PT_MOVE_PICTRUE = 0x34, PT_ERASE_PICTURE = 0x35,
+		PT_SHOW_PLAYER_BATTLE_ANIM = 0x36,
 	};
 
 	using Packet = Multiplayer::Packet;
@@ -71,6 +71,26 @@ namespace Messages {
 	};
 
 	/**
+	 * ClientHelloPacket
+	 */
+
+	class ClientHelloPacket : public Packet {
+	public:
+		constexpr static uint8_t packet_type{ PT_CLIENT_HELLO };
+		ClientHelloPacket() : Packet(packet_type) {}
+		ClientHelloPacket(uint32_t _ch, uint16_t _rid, std::string _n)
+			: Packet(packet_type), client_hash(_ch), room_id(_rid), name(std::move(_n)) {}
+		uint32_t client_hash{0};
+		uint16_t room_id{0};
+		std::string name;
+	private:
+		void Serialize(std::ostream& os) const override { WritePartial(os, client_hash); }
+		void Serialize2(std::ostream& os) const override { WritePartial(os, room_id, name); }
+		void DeSerialize(std::istream& is) override { client_hash = ReadU32(is); }
+		void DeSerialize2(std::istream& is) override { room_id = ReadU16(is), name = DeSerializeString16(is); }
+	};
+
+	/**
 	 * Room
 	 */
 
@@ -78,11 +98,12 @@ namespace Messages {
 	public:
 		constexpr static uint8_t packet_type{ PT_ROOM };
 		RoomPacket() : Packet(packet_type) {}
-		RoomPacket(uint16_t _room_id) : Packet(packet_type), room_id(_room_id) {}
+		RoomPacket(uint16_t _rid, uint32_t _ridh) : Packet(packet_type), room_id(_rid), room_id_hash(_ridh) {}
 		uint16_t room_id{0};
+		uint32_t room_id_hash{0};
 	private:
-		void Serialize(std::ostream& os) const override { WritePartial(os, room_id); }
-		void DeSerialize(std::istream& is) override { room_id = ReadU16(is); }
+		void Serialize(std::ostream& os) const override { WritePartial(os, room_id, room_id_hash); }
+		void DeSerialize(std::istream& is) override { room_id = ReadU16(is), room_id_hash = ReadU32(is); }
 	};
 
 	/**

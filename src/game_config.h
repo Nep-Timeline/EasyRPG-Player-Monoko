@@ -129,6 +129,7 @@ struct Game_ConfigMultiplayer {
 	BoolConfigParam client_auto_connect{ "", "", "Multiplayer", "ClientAutoConnect", false };
 	StringConfigParam client_remote_address{ "", "", "Multiplayer", "ClientRemoteAddress", "" };
 	StringConfigParam client_socks5_address{ "", "", "Multiplayer", "ClientSocks5Address", "" };
+	StringConfigParam client_crypt_key{ "", "", "Multiplayer", "ClientCryptKey", "" };
 	BoolConfigParam client_chat_notifications{ "", "", "Multiplayer", "ClientChatNotifications", true };
 	BoolConfigParam client_chat_immersive_mode{ "", "", "Multiplayer", "ClientChatImmersiveMode", false };
 	RangeConfigParam<int> client_chat_splitscreen_mode{ "", "", "Multiplayer", "ClientChatSplitScreenMode", 0, 0, 2 };

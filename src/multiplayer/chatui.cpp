@@ -1112,6 +1112,25 @@ void SendKeyHash() {
 	}
 }
 
+void GeneratePasswordKey(std::string password, std::function<void(std::string)> callback) {
+	auto GenerateKey = [password, callback]() {
+		OutputMt::Info("CRYPT: Generating encryption key ...");
+		std::string key;
+		CryptoError err = CryptoGetPasswordBase64Hash(password, key);
+		if (err == CryptoError::CE_NO_ERROR) {
+			callback(key);
+			OutputMt::Info("CRYPT: Done");
+		} else {
+			OutputMt::Warning("CRYPT: Key generation failed. err = {}", CryptoErrString(err));
+		}
+	};
+#ifndef EMSCRIPTEN
+	std::thread(GenerateKey).detach();
+#else
+	GenerateKey();
+#endif
+}
+
 void ShowWelcome() {
 	AddLogEntry("", "• IME input now supported!", "", Messages::CV_LOCAL);
 	AddLogEntry("", "  (for CJK characters, etc.)", "", Messages::CV_LOCAL);
@@ -1139,6 +1158,8 @@ void ShowUsage(Strfnd& fnd) {
 	if (doc_name.empty()) {
 		AddLogEntry("<!server, !srv> [on, off]", "", "", Messages::CV_LOCAL);
 		AddLogEntry("- ", "turn on/off the server", "", Messages::CV_LOCAL);
+		AddLogEntry("<!crypt> [password, <empty>]", "", "", Messages::CV_LOCAL);
+		AddLogEntry("- ", "configure connection encryption", "", Messages::CV_LOCAL);
 		AddLogEntry("<!connect, !c> [address, <empty>]", "", "", Messages::CV_LOCAL);
 		AddLogEntry("- ", "connect to the server", "", Messages::CV_LOCAL);
 		AddLogEntry("<!disconnect, !d>", "", "", Messages::CV_LOCAL);
@@ -1299,6 +1320,28 @@ void InputsTyping() {
 				AddClientInfo("Server: off");
 			}
 #endif
+		// command: !crypt
+		} else if (command == "!crypt") {
+			std::string password = fnd.next("");
+			if (password != "") {
+				auto Reminder = []() {
+					if (GMI().IsActive())
+						OutputMt::Info("You need to reconnect after setting up the encryption.");
+				};
+				if (password != "<empty>") {
+					GeneratePasswordKey(password, [Reminder](std::string key) {
+						GMI().GetConfig().client_crypt_key.Set(key);
+						Reminder();
+					});
+				} else {
+					GMI().GetConfig().client_crypt_key.Set("");
+					AddClientInfo("Encryption has been disabled.");
+					Reminder();
+				}
+			} else {
+				AddClientInfo(std::string("Encryption: ")
+					+ (GMI().GetConfig().client_crypt_key.Get().empty() ? "disabled" : "enabled"));
+			}
 		// command: !connect
 		} else if (command == "!connect" || command == "!c") {
 			std::string address = fnd.next("");
@@ -1327,23 +1370,10 @@ void InputsTyping() {
 			if (visibility_name == "CRYPT") {
 				std::string chat_crypt_password = fnd.next(" ");
 				if (chat_crypt_password != "") {
-					auto GenerateKey = [chat_crypt_password]() {
-						OutputMt::Info("CRYPT: Generating encryption key ...");
-						std::string key;
-						CryptoError err = CryptoGetPasswordBase64Hash(chat_crypt_password, key);
-						if (err == CryptoError::CE_NO_ERROR) {
-							GMI().GetConfig().client_chat_crypt_key.Set(key);
-							SendKeyHash();
-							OutputMt::Info("CRYPT: Done");
-						} else {
-							OutputMt::Warning("CRYPT: Key generation failed. err = {}", CryptoErrString(err));
-						}
-					};
-#ifndef EMSCRIPTEN
-					std::thread(GenerateKey).detach();
-#else
-					GenerateKey();
-#endif
+					GeneratePasswordKey(chat_crypt_password, [](std::string key) {
+						GMI().GetConfig().client_chat_crypt_key.Set(key);
+						SendKeyHash();
+					});
 				}
 			}
 		// command: !log

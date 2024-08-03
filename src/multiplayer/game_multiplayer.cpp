@@ -41,6 +41,7 @@
 #include "../cache.h"
 #include "../string_view.h"
 #include "../tone.h"
+#include "../utils.h"
 #include "client_connection.h"
 #include "chatui.h"
 #include "nametag.h"
@@ -72,6 +73,7 @@ namespace {
 	// Config
 	std::shared_ptr<int> multiplayer_json_request_id;
 	std::string game_name;
+	std::string client_hash;
 	Game_ConfigMultiplayer cfg;
 	int update_counter = 0;
 	struct {
@@ -152,6 +154,27 @@ int GetPlayerPictureId(int player_id, int picture_id) {
 			+ ((picture_id - 1) % pic_limit + 1);
 }
 
+void UpdateClientHash() {
+	std::stringstream ss;
+	ss << connection.GetCryptKey() << game_name;
+	uint32_t hash = Utils::CRC32(ss);
+	client_hash = std::string(reinterpret_cast<const char*>(&hash), sizeof(hash));
+}
+
+uint32_t GetClientHash() {
+	std::istringstream iss(client_hash);
+	return Utils::CRC32(iss);
+}
+
+uint32_t GetNumHash(int num) {
+	if (connection.Encrypted()) {
+		std::stringstream ss;
+		ss << client_hash << std::string_view(reinterpret_cast<const char*>(&num), sizeof(num));
+		return Utils::CRC32(ss);
+	}
+	return num;
+}
+
 void Setup() {
 	auto LoadTextConfig = [&]() {
 		Filesystem_Stream::InputStream is = FileFinder::OpenText("multiplayer.json");
@@ -161,6 +184,7 @@ void Setup() {
 		std::map cfg = v.get<picojson::object>();
 		if (cfg.find("game_name") != cfg.end() && cfg["game_name"].is<std::string>()) {
 			game_name = cfg["game_name"].to_str();
+			UpdateClientHash();
 		}
 		if (cfg.find("picture_names") != cfg.end() && cfg["picture_names"].is<picojson::array>()) {
 			for (const auto& value : cfg["picture_names"].get<picojson::array>()) {
@@ -311,8 +335,10 @@ PlayerData GetPlayerData() {
 }
 
 void SendBasicData() {
+	connection.SendPacketAsync<NamePacket>(cfg.client_chat_name.Get());
+	connection.SendPacketAsync<RoomPacket>(connection.Encrypted() ? 0 : room_id, GetNumHash(room_id));
+
 	PlayerData d = GetPlayerData();
-	connection.SendPacketAsync<RoomPacket>(room_id);
 	connection.SendPacketAsync<MovePacket>(d.pos_type, d.pos_x, d.pos_y);
 	connection.SendPacketAsync<SpeedPacket>(d.speed);
 	connection.SendPacketAsync<SpritePacket>(d.sprite_name, d.sprite_index);
@@ -393,7 +419,7 @@ void InitConnection() {
 
 	connection.RegisterSystemHandler(SystemMessage::OPEN, [](Connection& _) {
 		SendBasicData();
-		connection.SendPacket(NamePacket(cfg.client_chat_name.Get()));
+		connection.SendPacket(ClientHelloPacket(GetClientHash(), room_id, cfg.client_chat_name.Get()));
 		CUI().SetStatusConnection(true);
 	});
 	connection.RegisterSystemHandler(SystemMessage::CLOSE, [](Connection& _) {
@@ -461,7 +487,7 @@ void InitConnection() {
 	};
 
 	connection.RegisterHandler<RoomPacket>([](RoomPacket& p) {
-		if (p.room_id != room_id) {
+		if (p.room_id_hash != GetNumHash(room_id)) {
 			GMI().SwitchRoom(room_id); // wrong room, resend
 			return;
 		}
@@ -744,8 +770,6 @@ void Game_Multiplayer::SetConfig(const Game_ConfigMultiplayer& _cfg) {
 #endif
 	connection.SetConfig(&cfg);
 
-	connection.SetCryptKey("123");
-
 	// Heartbeat
 	if (!cfg.no_heartbeats.Get()) {
 		connection.RegisterHandler<HeartbeatPacket>([](HeartbeatPacket& p) {});
@@ -780,6 +804,11 @@ bool Game_Multiplayer::IsActive() {
 
 void Game_Multiplayer::Connect() {
 	if (connection.IsConnected()) return;
+	connection.SetCryptKey(cfg.client_crypt_key.Get());
+	if (connection.Encrypted()) {
+		Output::InfoStr("Connection is encrypted.");
+	}
+	UpdateClientHash();
 	active = true;
 	std::string remote_address = cfg.client_remote_address.Get();
 #ifndef EMSCRIPTEN
@@ -818,6 +847,7 @@ void Game_Multiplayer::SendChatMessage(int visibility, std::string message, int 
 	auto p = ChatPacket(visibility, message, ToString(Main_Data::game_system->GetSystemName()));
 	p.crypt_key_hash = crypt_key_hash;
 	p.name = cfg.client_chat_name.Get() != "" ? cfg.client_chat_name.Get() : "<unknown>";
+	p.room_id = room_id;
 	connection.SendPacket(p);
 }
 
@@ -980,7 +1010,7 @@ void Game_Multiplayer::VariableSet(int var_id, int value) {
 void Game_Multiplayer::PictureShown(int pic_id, Game_Pictures::ShowParams& params) {
 	if (IsPictureSynced(pic_id, params)) {
 		auto& p = Main_Data::game_player;
-		connection.SendPacketAsync<ShowPicturePacket>(pic_id, pic_id, params,
+		connection.SendPacketAsync<ShowPicturePacket>(GetNumHash(pic_id), pic_id, params,
 			Game_Map::GetPositionX(), Game_Map::GetPositionY(),
 			p->GetPanX(), p->GetPanY());
 	}
@@ -989,7 +1019,7 @@ void Game_Multiplayer::PictureShown(int pic_id, Game_Pictures::ShowParams& param
 void Game_Multiplayer::PictureMoved(int pic_id, Game_Pictures::MoveParams& params) {
 	if (sync_picture_cache.count(pic_id) && sync_picture_cache[pic_id]) {
 		auto& p = Main_Data::game_player;
-		connection.SendPacketAsync<MovePicturePacket>(pic_id, pic_id, params,
+		connection.SendPacketAsync<MovePicturePacket>(GetNumHash(pic_id), pic_id, params,
 			Game_Map::GetPositionX(), Game_Map::GetPositionY(),
 			p->GetPanX(), p->GetPanY());
 	}
@@ -998,7 +1028,7 @@ void Game_Multiplayer::PictureMoved(int pic_id, Game_Pictures::MoveParams& param
 void Game_Multiplayer::PictureErased(int pic_id) {
 	if (sync_picture_cache.count(pic_id) && sync_picture_cache[pic_id]) {
 		sync_picture_cache.erase(pic_id);
-		connection.SendPacketAsync<ErasePicturePacket>(pic_id, pic_id);
+		connection.SendPacketAsync<ErasePicturePacket>(GetNumHash(pic_id), pic_id);
 	}
 }
 
