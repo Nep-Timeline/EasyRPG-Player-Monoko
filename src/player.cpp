@@ -341,10 +341,10 @@ void Player::UpdateInput() {
 		Audio().ToggleMute();
 	}
 	float speed = 1.0;
-	if (Input::IsSystemPressed(Input::FAST_FORWARD_A)) {
+	if (CUI().IsCheating() && Input::IsSystemPressed(Input::FAST_FORWARD_A)) {
 		speed = speed_modifier_a;
 	}
-	if (Input::IsSystemPressed(Input::FAST_FORWARD_B)) {
+	if (CUI().IsCheating() && Input::IsSystemPressed(Input::FAST_FORWARD_B)) {
 		speed = speed_modifier_b;
 	}
 	Game_Clock::SetGameSpeedFactor(speed);

@@ -37,6 +37,8 @@ public:
 	void SetStatusConnection(bool connected, bool connecting = false);
 	void SetStatusRoom(unsigned int room_id);
 	void SetStatusProgress(unsigned int percent, std::string text);
+
+	bool IsCheating() const;
 };
 
 inline ChatUi& CUI() { return ChatUi::Instance(); }

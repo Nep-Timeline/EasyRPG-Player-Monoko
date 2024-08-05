@@ -1604,3 +1604,7 @@ void ChatUi::SetStatusProgress(unsigned int percent, std::string text) {
 	chat_box->SetStatusProgress(percent);
 	debugtext_downloading_text = std::move(text);
 }
+
+bool ChatUi::IsCheating() const {
+	return cheat_flag;
+}
