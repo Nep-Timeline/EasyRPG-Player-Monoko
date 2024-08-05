@@ -42,6 +42,8 @@
 #include "../string_view.h"
 #include "../tone.h"
 #include "../utils.h"
+#include "../graphics.h"
+#include "../debugtext_overlay.h"
 #include "client_connection.h"
 #include "chatui.h"
 #include "nametag.h"
@@ -71,6 +73,7 @@ namespace {
 	const int picture_limit = 50;
 
 	// Config
+	Game_Multiplayer::DebugTextMode debugtext_mode = Game_Multiplayer::DebugTextMode::NONE;
 	std::shared_ptr<int> multiplayer_json_request_id;
 	std::string game_name;
 	std::string client_hash;
@@ -332,6 +335,29 @@ PlayerData GetPlayerData() {
 	d.hidden = player->IsSpriteHidden();
 	d.system_name = ToString(Main_Data::game_system->GetSystemName());
 	return d;
+}
+
+std::string GetDebugText(int mode) {
+	PlayerData d = GetPlayerData();
+	std::string sprite_name = std::move(d.sprite_name);
+	if (sprite_name.empty()) sprite_name = "/";
+	std::ostringstream os;
+	if (mode & 2) {
+		os << "map id: " << room_id
+			<< " | pos: (" << d.pos_x
+			<< ", " << d.pos_y
+			<< ")";
+	}
+	if (mode & 4) {
+		if (mode & 6) os << " | ";
+		os << "facing: " << d.facing
+			<< " | speed: " << d.speed
+			<< " | hidden: " << d.hidden;
+		os << " | sprite: (" << sprite_name
+			<< ", " << d.sprite_index
+			<< ") | system: " << d.system_name;
+	}
+	return os.str();
 }
 
 void SendBasicData() {
@@ -737,21 +763,16 @@ Game_Multiplayer::Game_Multiplayer() {
 	InitConnection();
 }
 
-std::string Game_Multiplayer::GetDebugText() {
-	PlayerData d = GetPlayerData();
-	std::string sprite_name = std::move(d.sprite_name);
-	if (sprite_name.empty()) sprite_name = "/";
-	std::ostringstream os;
-	os << "map id: " << room_id
-		<< " | pos: (" << d.pos_x
-		<< ", " << d.pos_y
-		<< ") | speed: " << d.speed
-		<< " | sprite: (" << sprite_name
-		<< ", " << d.sprite_index
-		<< ") | facing: " << d.facing
-		<< " | hidden: " << d.hidden
-		<< " | system: " << d.system_name;
-	return os.str();
+void Game_Multiplayer::ToggleDebugTextMode(DebugTextMode mode) {
+	if (debugtext_mode == DebugTextMode::NONE) {
+		debugtext_mode = mode;
+	} else {
+		debugtext_mode = debugtext_mode == mode ? DebugTextMode::NONE : mode;
+	}
+	if (debugtext_mode != DebugTextMode::NONE)
+		Graphics::GetDebugTextOverlay().ShowItem("00_player_info");
+	else
+		Graphics::GetDebugTextOverlay().RemoveItem("00_player_info");
 }
 
 /** Config */
@@ -1105,6 +1126,9 @@ void Game_Multiplayer::Update() {
 	}
 	if (active) {
 		connection.Receive();
+	}
+	if (debugtext_mode != DebugTextMode::NONE) {
+		Graphics::GetDebugTextOverlay().UpdateItem("00_player_info", GetDebugText(static_cast<int>(debugtext_mode)));
 	}
 	OutputMt::Update();
 }

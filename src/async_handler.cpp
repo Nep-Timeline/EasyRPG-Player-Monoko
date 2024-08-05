@@ -80,10 +80,19 @@ namespace {
 #ifdef EMSCRIPTEN
 	void update_status() {
 		int percent = 0;
+		std::ostringstream os;
+		int count = 0;
+		bool first = true;
 		for (const auto& it : download_progresses) {
 			if (it.second > percent) percent = it.second;
+			if (download_progresses.size() - count < 10) {
+				if (!first) os << ", ";
+				os << "(" << it.second << "%):" << it.first;
+				first = false;
+			}
+			++count;
 		}
-		CUI().SetStatusProgress(download_progresses.empty() ? 100 : percent);
+		CUI().SetStatusProgress(download_progresses.empty() ? 100 : percent, os.str());
 	}
 
 	struct async_download_context {

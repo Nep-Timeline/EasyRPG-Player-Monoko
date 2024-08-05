@@ -45,7 +45,12 @@ public:
 		nametag_mode = static_cast<NametagMode>(mode);
 	}
 
-	std::string GetDebugText();
+	enum class DebugTextMode {
+		NONE = 0,
+		PLAYER_BASIC = 2,
+		PLAYER_FULL = 6,
+	};
+	void ToggleDebugTextMode(DebugTextMode mode);
 
 	// Config
 	void SetRemoteAddress(std::string address);

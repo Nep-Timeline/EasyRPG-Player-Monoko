@@ -27,6 +27,7 @@
 
 class MessageOverlay;
 class StatusTextOverlay;
+class DebugTextOverlay;
 class Scene;
 
 /**
@@ -64,6 +65,8 @@ namespace Graphics {
 	MessageOverlay& GetMessageOverlay();
 
 	StatusTextOverlay& GetStatusTextOverlay();
+
+	DebugTextOverlay& GetDebugTextOverlay();
 }
 
 #endif
