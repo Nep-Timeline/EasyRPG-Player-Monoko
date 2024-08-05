@@ -27,34 +27,39 @@ struct PlayerOther;
 
 class NameTag : public Drawable {
 public:
-	NameTag(int id, PlayerOther& player, std::string nickname);
+	NameTag(int id, std::string nickname, PlayerOther& player);
 
 	void Draw(Bitmap& dst) override;
 
+	void SetNickname(StringView name);
 	void SetSystemGraphic(StringView sys_name);
-
 	void SetEffectsDirty();
-
 	void SetFlashFramesLeft(int frames);
-
 	void SetTransparent(bool val);
 
 private:
 	PlayerOther& player;
+
 	std::string nickname;
+	std::string nick_trim;
+
 	BitmapRef nick_img;
 	BitmapRef sys_graphic;
 	BitmapRef effects_img;
+
 	bool transparent;
 	int base_opacity = 32;
+
 	bool dirty = true;
-	bool effects_dirty;
+	bool effects_dirty = false;
+
 	Game_Multiplayer::NametagMode nametag_mode_cache;
 	int flash_frames_left;
 	int last_valid_sprite_y_offset;
 
 	void SetBaseOpacity(int val);
 	int GetOpacity();
+
 	int GetSpriteYOffset();
 };
 

@@ -23,16 +23,16 @@
 #include "../filefinder.h"
 #include "../bitmap.h"
 #include "../sprite_character.h"
+#include "../utils.h"
 #include "game_playerother.h"
 #include "playerother.h"
 
 std::map<std::string, std::array<int, 96>> sprite_y_offsets;
 
-NameTag::NameTag(int id, PlayerOther& player, std::string nickname)
-	:player(player),
-	nickname(std::move(nickname)),
-	Drawable(Priority_Screen + id) {
+NameTag::NameTag(int id, std::string nickname, PlayerOther& player)
+		: Drawable(Priority_Screen + id), player(player) {
 	DrawableMgr::Register(this);
+	SetNickname(nickname);
 }
 
 void NameTag::Draw(Bitmap& dst) {
@@ -51,17 +51,8 @@ void NameTag::Draw(Bitmap& dst) {
 	}
 
 	if (dirty) {
-		std::string nick_trim;
-
-		if (nametag_mode != Game_Multiplayer::NametagMode::CLASSIC) {
-			nick_trim = nickname;
-		} else {
-			nick_trim = nickname.substr(0, std::min(3, (int)nickname.size()));
-		}
-
-		// FIXME: Text::GetSize is broken and always returns a height of 0, use 12 for now
 		auto rect = Text::GetSize(*Font::NameText(), nick_trim);
-		nick_img = Bitmap::Create(rect.width, 12);
+		nick_img = Bitmap::Create(rect.width, rect.height);
 
 		Text::Draw(*nick_img, 0, 0, *Font::NameText(), *(sys_graphic ? sys_graphic : Cache::SystemOrBlack()), 0, nick_trim);
 
@@ -103,6 +94,22 @@ void NameTag::Draw(Bitmap& dst) {
 		dst.Blit(x, y, *effects_img, effects_img->GetRect(), Opacity(GetOpacity()));
 	}
 }
+
+void NameTag::SetNickname(StringView name) {
+	nickname = ToString(name);
+
+	std::u32string nick_unicode = Utils::DecodeUTF32(nickname);
+
+	if (GMI().GetNametagMode() == Game_Multiplayer::NametagMode::CLASSIC) {
+		nick_unicode = nick_unicode.substr(0, std::min(3, (int)nick_unicode.size()));
+	} else {
+		nick_unicode = nick_unicode.substr(0, std::min(12, (int)nick_unicode.size()));
+	}
+
+	nick_trim = Utils::EncodeUTF(nick_unicode);
+
+	dirty = true;
+};
 
 void NameTag::SetSystemGraphic(StringView sys_name) {
 	sys_graphic = Cache::System(sys_name);

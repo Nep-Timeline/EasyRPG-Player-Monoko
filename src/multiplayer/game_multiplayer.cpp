@@ -750,9 +750,13 @@ void InitConnection() {
 			return;
 		}
 		auto old_list = &DrawableMgr::GetLocalList();
-		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
-		player.name_tag = std::make_unique<NameTag>(p.id, player, std::string(p.name));
-		DrawableMgr::SetLocalList(old_list);
+		if (player.name_tag) {
+			player.name_tag->SetNickname(p.name);
+		} else {
+			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+			player.name_tag = std::make_unique<NameTag>(p.id, p.name, player);
+			DrawableMgr::SetLocalList(old_list);
+		}
 	});
 }
 
@@ -865,6 +869,7 @@ void Game_Multiplayer::Disconnect() {
 /** Chat */
 
 void Game_Multiplayer::SetChatName(std::string chat_name) {
+	if (chat_name.size() > 16) Output::InfoStr("Chat name too long.");
 	cfg.client_chat_name.Set(chat_name);
 	connection.SendPacket(NamePacket(cfg.client_chat_name.Get()));
 }

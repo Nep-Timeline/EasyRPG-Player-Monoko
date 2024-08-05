@@ -1549,8 +1549,12 @@ void ChatUi::SetFocus(bool focused) {
 
 void ChatUi::GotMessage(int visibility, int room_id,
 		std::string name, std::string message, std::string sys_name) {
-	if (chat_box == nullptr)
+	if (chat_box == nullptr) return;
+	if (name.size() > 16) name = "<unknown>";
+	if (message.size() > MAXCHARSINPUT_MESSAGE) {
+		Output::InfoStr("Sender's message too long, ignored.");
 		return;
+	}
 	VisibilityType v = static_cast<VisibilityType>(visibility);
 	std::string vtext = "?";
 	if (v == Messages::CV_CRYPT) {

@@ -223,6 +223,7 @@ class ServerSideClient {
 		connection.RegisterHandler<NamePacket>([this](NamePacket& p) {
 			p.id = id;
 			state.name = p;
+			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<ChatPacket>([this](ChatPacket& p) {
 			p.id = id;
