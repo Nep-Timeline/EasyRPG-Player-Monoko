@@ -489,6 +489,10 @@ void Game_Player::ResetGraphic() {
 		return;
 	}
 
+	if (Game_Character::GetType() == Game_Character::Player
+			&& Game_Character::GetTransparency() != actor->GetSpriteTransparency())
+		GMI().MainPlayerChangedTransparency(actor->GetSpriteTransparency());
+
 	SetSpriteGraphic(ToString(actor->GetSpriteName()), actor->GetSpriteIndex());
 	SetTransparency(actor->GetSpriteTransparency());
 }

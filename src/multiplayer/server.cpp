@@ -118,6 +118,7 @@ class ServerSideClient {
 		SpeedPacket speed;
 		SpritePacket sprite;
 		RepeatingFlashPacket repeating_flash;
+		TransparencyPacket transparency;
 		HiddenPacket hidden;
 		SystemPacket system;
 		std::map<uint32_t, ShowPicturePacket> pictures;
@@ -151,6 +152,8 @@ class ServerSideClient {
 				SendSelfAsync(client.state.sprite);
 			if (client.state.repeating_flash.IsAvailable())
 				SendSelfAsync(client.state.repeating_flash);
+			if (client.state.transparency.IsAvailable())
+				SendSelfAsync(client.state.transparency);
 			if (client.state.hidden.IsAvailable())
 				SendSelfAsync(client.state.hidden);
 			if (client.state.system.name != "" || client.state.system.Encrypted())
@@ -284,6 +287,11 @@ class ServerSideClient {
 		connection.RegisterHandler<RemoveRepeatingFlashPacket>([this](RemoveRepeatingFlashPacket& p) {
 			p.id = id;
 			state.repeating_flash.Discard();
+			SendLocalAsync(p);
+		});
+		connection.RegisterHandler<TransparencyPacket>([this](TransparencyPacket& p) {
+			p.id = id;
+			state.transparency = p;
 			SendLocalAsync(p);
 		});
 		connection.RegisterHandler<HiddenPacket>([this](HiddenPacket& p) {

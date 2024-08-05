@@ -53,9 +53,9 @@ namespace Messages {
 		PT_MOVE = 0x27, PT_JUMP = 0x28,
 		PT_FACING= 0x2a, PT_SPEED = 0x2b, PT_SPRITE = 0x2c,
 		PT_FLASH = 0x2d, PT_REPEATING_FLASH = 0x2e, PT_REMOVE_REPEATING_FLASH = 0x2f,
-		PT_HIDDEN = 0x30, PT_SYSTEM = 0x31, PT_SOUND_EFFECT = 0x32,
-		PT_SHOW_PICTURE = 0x33, PT_MOVE_PICTRUE = 0x34, PT_ERASE_PICTURE = 0x35,
-		PT_SHOW_PLAYER_BATTLE_ANIM = 0x36,
+		PT_TRANSPARENCY = 0x30, PT_HIDDEN = 0x31, PT_SYSTEM = 0x32, PT_SOUND_EFFECT = 0x33,
+		PT_SHOW_PICTURE = 0x34, PT_MOVE_PICTRUE = 0x35, PT_ERASE_PICTURE = 0x36,
+		PT_SHOW_PLAYER_BATTLE_ANIM = 0x37,
 	};
 
 	using Packet = Multiplayer::Packet;
@@ -368,6 +368,26 @@ namespace Messages {
 	private:
 		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
 		void DeSerialize(std::istream& is) override { PlayerPacket::DeSerialize(is); }
+	};
+
+	/**
+	 * Transparency
+	 */
+
+	class TransparencyPacket : public PlayerPacket {
+	public:
+		constexpr static uint8_t packet_type{ PT_TRANSPARENCY };
+		TransparencyPacket() : PlayerPacket(packet_type) {}
+		TransparencyPacket(uint8_t _tr)
+			: PlayerPacket(packet_type), transparency(_tr) {} // C2S
+		TransparencyPacket(uint16_t _id, uint8_t _tr) // S2C
+			: PlayerPacket(packet_type, _id), transparency(_tr) {}
+		uint8_t transparency{0};
+	private:
+		void Serialize(std::ostream& os) const override { PlayerPacket::Serialize(os); }
+		void Serialize2(std::ostream& os) const override { WritePartial(os, transparency); }
+		void DeSerialize(std::istream& is) override { PlayerPacket::DeSerialize(is); }
+		void DeSerialize2(std::istream& is) override { transparency = ReadU8(is); }
 	};
 
 	/**

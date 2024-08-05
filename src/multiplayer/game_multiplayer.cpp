@@ -307,6 +307,7 @@ struct PlayerData {
 	std::string sprite_name;
 	int sprite_index;
 	int facing;
+	int transparency;
 	bool hidden;
 	std::string system_name;
 };
@@ -332,6 +333,7 @@ PlayerData GetPlayerData() {
 	d.sprite_name = player->GetSpriteName();
 	d.sprite_index = player->GetSpriteIndex();
 	d.facing = player->GetFacing();
+	d.transparency = player->GetTransparency();
 	d.hidden = player->IsSpriteHidden();
 	d.system_name = ToString(Main_Data::game_system->GetSystemName());
 	return d;
@@ -352,6 +354,7 @@ std::string GetDebugText(int mode) {
 		if (mode & 6) os << " | ";
 		os << "facing: " << d.facing
 			<< " | speed: " << d.speed
+			<< " | transparency: " << d.transparency
 			<< " | hidden: " << d.hidden;
 		os << " | sprite: (" << sprite_name
 			<< ", " << d.sprite_index
@@ -371,6 +374,7 @@ void SendBasicData() {
 	if (d.facing > 0) {
 		connection.SendPacketAsync<FacingPacket>(d.facing);
 	}
+	connection.SendPacketAsync<TransparencyPacket>(d.transparency);
 	connection.SendPacketAsync<HiddenPacket>(d.hidden);
 	connection.SendPacketAsync<SystemPacket>(d.system_name);
 }
@@ -626,6 +630,11 @@ void InitConnection() {
 	connection.RegisterHandler<RemoveRepeatingFlashPacket>([](RemoveRepeatingFlashPacket& p) {
 		if (players.find(p.id) == players.end()) return;
 		repeating_flashes.erase(p.id);
+	});
+	connection.RegisterHandler<TransparencyPacket>([](TransparencyPacket& p) {
+		if (players.find(p.id) == players.end()) return;
+		auto& player = players[p.id];
+		player.ch->SetTransparency(Utils::Clamp((int)p.transparency, 0, 7));
 	});
 	connection.RegisterHandler<HiddenPacket>([](HiddenPacket& p) {
 		if (players.find(p.id) == players.end()) return;
@@ -992,6 +1001,10 @@ void Game_Multiplayer::MainPlayerFlashed(int r, int g, int b, int p, int f) {
 		last_frame_flash.reset();
 	}
 	last_flash_frame_index = frame_index;
+}
+
+void Game_Multiplayer::MainPlayerChangedTransparency(int transparency) {
+	connection.SendPacketAsync<TransparencyPacket>(transparency);
 }
 
 void Game_Multiplayer::MainPlayerChangedSpriteHidden(bool hidden) {
