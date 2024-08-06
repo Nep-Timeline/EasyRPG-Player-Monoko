@@ -44,12 +44,16 @@ public:
 	void HideItem(const std::string& name);
 	void RemoveItem(const std::string& name);
 
+	void SetColor(int color);
+
 private:
 	Rect bitmap_rect;
 	BitmapRef bitmap;
 
 	std::map<std::string, DebugTextOverlayItem> items;
 	std::vector<std::string> remove_list;
+
+	int color = 0;
 };
 
 #endif

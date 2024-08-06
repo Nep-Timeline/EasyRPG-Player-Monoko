@@ -37,6 +37,7 @@
 #include "../game_switches.h"
 #include "../game_variables.h"
 #include "../game_map.h"
+#include "../version.h"
 #include "output_mt.h"
 #include "game_multiplayer.h"
 #include "util/strfnd.h"
@@ -50,6 +51,8 @@
 namespace {
 
 using VisibilityType = Messages::VisibilityType;
+
+ChatUiTextConfig tcfg;
 
 /**
  * Online Status
@@ -115,7 +118,8 @@ public:
 
 		auto c_rect = Text::GetSize(*Font::Default(), conn_label);
 		conn_status = Bitmap::Create(c_rect.width + 1, c_rect.height + 1, true);
-		Text::Draw(*conn_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 2, conn_label);
+		Text::Draw(*conn_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(),
+			tcfg.color_status_connection, conn_label);
 	}
 
 	void UpdateConnectionStatus() {
@@ -135,7 +139,7 @@ public:
 
 		auto r_rect = Text::GetSize(*Font::Default(), room_label);
 		room_status = Bitmap::Create(r_rect.width + 1, r_rect.height + 1, true);
-		Text::Draw(*room_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 1, room_label);
+		Text::Draw(*room_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), tcfg.color_status_room, room_label);
 	}
 
 	void UpdateRoomStatus() {
@@ -154,36 +158,15 @@ public:
  * ChatLog
  */
 
+using ChatText = std::vector<std::pair<std::string, int8_t>>;
+
 struct ChatEntry {
-	std::string color_a; // text a
-	std::string color_b; // text b
-	std::string color_c; // text c
-	std::string color_d; // text d
-	std::string color_e; // text e
-	int8_t _color_a; // color selection _a of text a
-	int8_t _color_b; // color selection _b of text b
-	int8_t _color_c; // color selection _c of text c
-	int8_t _color_d; // color selection _d of text d
-	int8_t _color_e; // color selection _e of text e
+	ChatText text;
 	VisibilityType visibility;
 	std::string sys_name;
 	bool break_word;
-	ChatEntry(std::string a, std::string b, std::string c, std::string d, std::string e,
-			int8_t _a, int8_t _b, int8_t _c, int8_t _d, int8_t _e,
-			VisibilityType v, std::string sys, bool bw) {
-		color_a = a;
-		color_b = b;
-		color_c = c;
-		color_d = d;
-		color_e = e;
-		_color_a = _a;
-		_color_b = _b;
-		_color_c = _c;
-		_color_d = _d;
-		_color_e = _e;
-		visibility = v;
-		sys_name = sys;
-		break_word = bw;
+	ChatEntry(ChatText t, VisibilityType v, std::string sys, bool bw) {
+		text = std::move(t), visibility = v, sys_name = std::move(sys), break_word = bw;
 	}
 };
 
@@ -233,10 +216,14 @@ class DrawableChatLog : public Drawable {
 				iter = resp.next;
 
 				Rect ch_rect;
-				if (resp.is_exfont)
+				if (resp.is_exfont) {
 					ch_rect = Text::GetSize(*Font::exfont, " ");
-				else
-					ch_rect = Font::Default()->GetSize(resp.ch);
+				} else {
+					if (resp.ch == u'\uFF00')
+						ch_rect = Rect(0, 0, 0, 0);
+					else
+						ch_rect = Font::Default()->GetSize(resp.ch);
+				}
 
 				line.push_back({resp, ch_rect, color});
 				width += ch_rect.width;
@@ -262,6 +249,7 @@ class DrawableChatLog : public Drawable {
 		};
 		auto MoveGlyphsToNext = [](GlyphLine& curr, GlyphLine& next,
 				unsigned int& curr_width, unsigned int& next_width, unsigned int amount) {
+			/** pop `curr` last glyph, insert `next` in reverse order (begin()) */
 			for (int i = 0; i < amount; i++) {
 				auto& glyph = curr.back();
 				unsigned int delta_width = glyph.dims.width;
@@ -302,11 +290,7 @@ class DrawableChatLog : public Drawable {
 
 		// break down whole message string into glyphs for processing.
 		// glyph lookup is performed only at this stage, and their dimensions are saved for subsequent line width recalculations.
-		ExtractGlyphs(msg.message_data->color_a, msg.message_data->_color_a, glyphs_current, width_current);
-		ExtractGlyphs(msg.message_data->color_b, msg.message_data->_color_b, glyphs_current, width_current);
-		ExtractGlyphs(msg.message_data->color_c, msg.message_data->_color_c, glyphs_current, width_current);
-		ExtractGlyphs(msg.message_data->color_d, msg.message_data->_color_d, glyphs_current, width_current);
-		ExtractGlyphs(msg.message_data->color_e, msg.message_data->_color_e, glyphs_current, width_current);
+		for (const auto& t : msg.message_data->text) ExtractGlyphs(t.first, t.second, glyphs_current, width_current);
 
 		bool break_word = msg.message_data->break_word;
 
@@ -333,7 +317,13 @@ class DrawableChatLog : public Drawable {
 				MoveGlyphsToNext(glyphs_current, glyphs_next,
 					width_current, width_next, glyphs_current.size() - line_break - 1);
 			}
-			// save line
+			// a special character used to align text to the right
+			int remaining_width_char = FindLastGlyphOf(glyphs_current, u'\uFF00');
+			if (remaining_width_char != -1) {
+				glyphs_current[remaining_width_char].dims.width = max_width - width_current;
+				width_current = max_width;
+			}
+			// save current line
 			lines.push_back(std::make_pair(glyphs_current, total_height));
 			total_width = std::max<unsigned int>(total_width, width_current);
 			total_height += GetLineHeight(glyphs_current);
@@ -346,7 +336,7 @@ class DrawableChatLog : public Drawable {
 				// use the '>' as the truncated signs
 				auto& last_glyph = lines.front().first.back();
 				last_glyph.data.ch = '>';
-				last_glyph.color = 2;
+				last_glyph.color = tcfg.color_log_truncatechar;
 				break;
 			}
 		} while (glyphs_current.size() > 0);
@@ -369,12 +359,16 @@ class DrawableChatLog : public Drawable {
 				auto& glyph = line.first[j];
 				auto ret = glyph.data;
 				if (EP_UNLIKELY(!ret)) continue;
-				if (glyph.color > -1) {
-					glyph_offset += Text::Draw(*text_img, glyph_offset + message_padding, line.second + message_padding,
-						*Font::Default(), *graphic, glyph.color, ret.ch, ret.is_exfont).x;
+				if (ret.ch == u'\uFF00') {
+					glyph_offset += glyph.dims.width;
 				} else {
-					glyph_offset += Text::Draw(*text_img, glyph_offset + message_padding, line.second + message_padding,
-						*Font::Default(), *default_theme, 0, ret.ch, ret.is_exfont).x;
+					if (glyph.color > -1) {
+						glyph_offset += Text::Draw(*text_img, glyph_offset + message_padding, line.second + message_padding,
+							*Font::Default(), *graphic, glyph.color, ret.ch, ret.is_exfont).x;
+					} else {
+						glyph_offset += Text::Draw(*text_img, glyph_offset + message_padding, line.second + message_padding,
+							*Font::Default(), *default_theme, 0, ret.ch, ret.is_exfont).x;
+					}
 				}
 			}
 		}
@@ -669,7 +663,8 @@ public:
 		const unsigned int caret_left_kerning = 6;
 		auto c_rect = Text::GetSize(*Font::Default(), caret_char);
 		caret = Bitmap::Create(c_rect.width + 1 - caret_left_kerning, c_rect.height + 1, true);
-		Text::Draw(*caret, -caret_left_kerning, 0, *Font::Default(), *Cache::SystemOrBlack(), 0, caret_char);
+		Text::Draw(*caret, -caret_left_kerning, 0, *Font::Default(), *Cache::SystemOrBlack(),
+			tcfg.color_typebox, caret_char);
 
 		// initialize
 		UpdateTypeText(std::u32string());
@@ -731,7 +726,8 @@ public:
 		// final value assigned to accumulated_rect is whole type string
 		// create Bitmap graphic for text
 		type_text = Bitmap::Create(accumulated_rect.width + 1, accumulated_rect.height + 1, true);
-		Text::Draw(*type_text, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), 0, Utils::EncodeUTF(text));
+		Text::Draw(*type_text, 0, 0, *Font::Default(), *Cache::SystemOrBlack(),
+			tcfg.color_typebox, Utils::EncodeUTF(text));
 	}
 
 	const int GetCaretRelativeOffset() {
@@ -1062,12 +1058,8 @@ bool cheat_flag = false;
 bool debugtext_downloading_flag = false;
 std::string debugtext_downloading_text;
 
-void AddLogEntry(
-		std::string a, std::string b, std::string c, std::string d, std::string e,
-		int8_t _a, int8_t _b, int8_t _c, int8_t _d, int8_t _e,
-		VisibilityType v, std::string sys_name) {
-	chat_log.push_back(std::make_unique<ChatEntry>(
-			a, b, c, d, e, _a, _b, _c, _d, _e, v, sys_name, true));
+void AddLogEntry(ChatText t, VisibilityType v, std::string sys_name) {
+	chat_log.push_back(std::make_unique<ChatEntry>(t, v, sys_name, true));
 	chat_box->AddLogEntry(chat_log.back().get());
 	if (chat_log.size() > MAXMESSAGES) {
 		chat_box->RemoveLogEntry(chat_log.front().get());
@@ -1075,27 +1067,35 @@ void AddLogEntry(
 	}
 }
 
-void AddLogEntry(std::string a, std::string b, std::string c, VisibilityType v) {
-	AddLogEntry(a, b, c, "", "", 1, 2, 0, 0, 0, v, "");
-}
-
-void AddNotificationLogEntry(
-		std::string a, std::string b, std::string c, std::string d, std::string e,
-		int8_t _a, int8_t _b, int8_t _c, int8_t _d, int8_t _e,
-		VisibilityType v, std::string sys_name) {
-	chat_notification_log.push_back(std::make_unique<ChatEntry>(
-			a, b, c, d, e, _a, _b, _c, _d, _e, v, sys_name, false));
+void AddNotificationLogEntry(ChatText t, VisibilityType v, std::string sys_name) {
+	chat_notification_log.push_back(std::make_unique<ChatEntry>(std::move(t), v, sys_name, false));
 	chat_box->AddNotificationLogEntry(chat_notification_log.back().get(), MAXNOTIFICATIONS);
 	if (chat_notification_log.size() > MAXNOTIFICATIONS)
 		chat_notification_log.erase(chat_notification_log.begin());
 }
 
-void AddNotificationLogEntry(std::string a, std::string b, std::string c, VisibilityType v) {
-	AddNotificationLogEntry(a, b, c, "", "", 1, 2, 0, 0, 0, v, "");
+// => Default
+void PrintD(std::string message, bool notify_add = false) {
+	AddLogEntry(ChatText{{message, tcfg.color_print_message}}, Messages::CV_LOCAL, "");
+	if (notify_add)
+		AddNotificationLogEntry(ChatText{{message, tcfg.color_print_message}}, Messages::CV_LOCAL, "");
 }
 
-void AddClientInfo(std::string message) {
-	AddLogEntry("[Client]: ", message, "", Messages::CV_LOCAL);
+// => Label ...
+void PrintL(std::string label, std::string message = "", bool notify_add = false) {
+	AddLogEntry(ChatText{
+		{label, tcfg.color_print_label}, {message, tcfg.color_print_label_message}
+	}, Messages::CV_LOCAL, "");
+	if (notify_add) {
+		AddNotificationLogEntry(ChatText{
+			{label, tcfg.color_print_label}, {message, tcfg.color_print_label_message}
+		}, Messages::CV_LOCAL, "");
+	}
+}
+
+// => [Client]: ...
+void PrintC(std::string message, bool notify_add = false) {
+	PrintL("[Client]: ", std::move(message), notify_add);
 }
 
 bool SetChatVisibility(std::string visibility_name) {
@@ -1136,80 +1136,82 @@ void GeneratePasswordKey(std::string password, std::function<void(std::string)> 
 }
 
 void ShowWelcome() {
-	AddLogEntry("", "• IME input now supported!", "", Messages::CV_LOCAL);
-	AddLogEntry("", "  (for CJK characters, etc.)", "", Messages::CV_LOCAL);
-	AddLogEntry("", "• You can now copy and", "", Messages::CV_LOCAL);
-	AddLogEntry("", "  paste from type box.", "", Messages::CV_LOCAL);
-	AddLogEntry("", "• SHIFT+[←, →] to select text.", "", Messages::CV_LOCAL);
+	PrintD("• IME input now supported!");
+	PrintD("  (for CJK characters, etc.)");
+	PrintD("• You can now copy and");
+	PrintD("  paste from type box.");
+	PrintD("• SHIFT+[←, →] to select text.");
 #ifdef EMSCRIPTEN
-	AddLogEntry("", "• In file scene (Savegame),", "", Messages::CV_LOCAL);
-	AddLogEntry("", "  press SHIFT to upload.", "", Messages::CV_LOCAL);
-	AddLogEntry("", "  (File uploaded locally only)", "", Messages::CV_LOCAL);
+	PrintD("• In file scene (Savegame),");
+	PrintD("  press SHIFT to upload.");
+	PrintD("  (File uploaded locally only)");
 #endif
-	AddLogEntry("", "• Type !help to list commands.", "", Messages::CV_LOCAL);
-	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
-	AddLogEntry("[F3]: ", "hide/show notifications.", "", Messages::CV_LOCAL);
-	AddLogEntry("[TAB]: ", "focus/unfocus.", "", Messages::CV_LOCAL);
-	AddLogEntry("[↑, ↓]: ", "scroll.", "", Messages::CV_LOCAL);
+	PrintD("• Type !help to list commands.");
+	PrintD("―――");
+	PrintL("[F3]: ", "hide/show notifications.");
+	PrintL("[TAB]: ", "focus/unfocus.");
+	PrintL("[↑, ↓]: ", "scroll.");
+	PrintD("―――");
+	PrintD("v" + Version::GetVersionString(true, true));
 }
 
 void ShowUsage(Strfnd& fnd) {
-	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
-	AddLogEntry("", "Usage:", "", Messages::CV_LOCAL);
-	AddLogEntry("", "[...] Optional | <...> Required", "", Messages::CV_LOCAL);
-	AddLogEntry("", "", "―――", Messages::CV_LOCAL);
+	PrintD("―――");
+	PrintD("Usage:");
+	PrintD("[...] Optional | <...> Required");
+	PrintD("―――");
 	std::string doc_name = fnd.next(" ");
 	if (doc_name.empty()) {
-		AddLogEntry("<!server, !srv> [on, off]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "turn on/off the server", "", Messages::CV_LOCAL);
-		AddLogEntry("<!crypt> [password, <empty>]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "configure connection encryption", "", Messages::CV_LOCAL);
-		AddLogEntry("<!connect, !c> [address, <empty>]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "connect to the server", "", Messages::CV_LOCAL);
-		AddLogEntry("<!disconnect, !d>", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "disconnect from server", "", Messages::CV_LOCAL);
-		AddLogEntry("!name [text, <unknown>]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "change chat name", "", Messages::CV_LOCAL);
-		AddLogEntry("!chat [LOCAL, GLOBAL, CRYPT] [CRYPT Password]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "switch visibility to chat", "", Messages::CV_LOCAL);
-		AddLogEntry("!log [LOCAL, GLOBAL, CRYPT]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "toggle visibility", "", Messages::CV_LOCAL);
-		AddLogEntry("<!immersive, !imm>", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "toggle the immersive mode", "", Messages::CV_LOCAL);
-		AddLogEntry("<!splitscreen, !ss> [vertically, v]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "toggle the split-screen mode", "", Messages::CV_LOCAL);
-		AddLogEntry("<!debugtext, !dt> ...", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "see !help debugtext", "", Messages::CV_LOCAL);
+		PrintL("<!server, !srv> ", "[on, off]");
+		PrintD("- turn on/off the server");
+		PrintL("<!crypt> ", "[password, <empty>]");
+		PrintD("- configure connection encryption");
+		PrintL("<!connect, !c> ", "[address, <empty>]");
+		PrintD("- connect to the server");
+		PrintL("<!disconnect, !d>");
+		PrintD("- disconnect from server");
+		PrintL("!name ", "[text, <unknown>]");
+		PrintD("- change chat name");
+		PrintL("!chat [LOCAL, GLOBAL, CRYPT] ", "[CRYPT Password]");
+		PrintD("- switch visibility to chat");
+		PrintL("!log ", "[LOCAL, GLOBAL, CRYPT]");
+		PrintD("- toggle visibility");
+		PrintL("<!immersive, !imm>");
+		PrintD("- toggle the immersive mode");
+		PrintL("<!splitscreen, !ss> ", "[vertically, v]");
+		PrintD("- toggle the split-screen mode");
+		PrintL("<!debugtext, !dt> ", "...");
+		PrintD("- see !help debugtext");
 	} else if (doc_name == "cheat") {
-		AddLogEntry("!cheat", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "Toggle cheat mode", "", Messages::CV_LOCAL);
-		AddLogEntry("", "(The following commands depend on this mode)", "", Messages::CV_LOCAL);
-		AddLogEntry("!getvar <id> | !setvar <id> <value>", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "Get/Set variables", "", Messages::CV_LOCAL);
-		AddLogEntry("!getsw <id> | !setsw <id> <0, 1>", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "Get/Set switches", "", Messages::CV_LOCAL);
-		AddLogEntry("!debug", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "Enable TestPlay mode", "", Messages::CV_LOCAL);
+		PrintL("!cheat");
+		PrintD("- Toggle cheat mode");
+		PrintD("(The following commands depend on this mode)");
+		PrintL("!getvar <id> | !setvar <id> <value>");
+		PrintD("- Get/Set variables");
+		PrintL("!getsw <id> | !setsw <id> <0, 1>");
+		PrintD("- Get/Set switches");
+		PrintL("!debug");
+		PrintD("- Enable TestPlay mode");
 	} else if (doc_name == "debugtext") {
-		AddLogEntry("<!debugtext, !dt> [player, p]", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "Toggle player status", "", Messages::CV_LOCAL);
-		AddLogEntry("<!debugtext, !dt> <downloading, d>", "", "", Messages::CV_LOCAL);
-		AddLogEntry("- ", "Toggle downloading status", "", Messages::CV_LOCAL);
+		PrintL("<!debugtext, !dt> ", "[player, p]");
+		PrintD("- Toggle player status");
+		PrintL("<!debugtext, !dt> ", "<downloading, d>");
+		PrintD("- Toggle downloading status");
 	} else {
-		AddLogEntry("No entry for " + doc_name, "", "", Messages::CV_LOCAL);
+		PrintD("No entry for " + doc_name);
 	}
 }
 
 void ToggleCheat() {
 	cheat_flag = !cheat_flag;
-	AddClientInfo("Cheat: " + std::string(cheat_flag == true ? "enabled" : "disabled"));
+	PrintC("Cheat: " + std::string(cheat_flag == true ? "enabled" : "disabled"));
 	if (cheat_flag)
-		AddClientInfo("You can type !cheat to turn it off.");
+		PrintC("You can type !cheat to turn it off.");
 	else if (Player::debug_flag) {
 		if (Scene::Find(Scene::SceneType::Debug) != nullptr)
 			Scene::Pop();
 		Player::debug_flag = false;
-		AddClientInfo("TestPlay mode: disabled");
+		PrintC("TestPlay mode: disabled");
 	}
 }
 
@@ -1217,7 +1219,7 @@ void SetFocus(bool focused) {
 	Input::SetGameFocus(!focused);
 	chat_box->SetFocus(focused);
 	if (focused && Player::debug_flag && !cheat_flag) {
-		AddClientInfo("[TestPlay] The cheat mode is being toggled");
+		PrintC("[TestPlay] The cheat mode is being toggled");
 		ToggleCheat();
 	}
 }
@@ -1325,10 +1327,10 @@ void InputsTyping() {
 			std::string option = fnd.next(" ");
 			if (option == "on") {
 				Server().Start();
-				AddClientInfo("Server: on");
+				PrintC("Server: on");
 			} else if (option == "off") {
 				Server().Stop();
-				AddClientInfo("Server: off");
+				PrintC("Server: off");
 			}
 #endif
 		// command: !crypt
@@ -1346,11 +1348,11 @@ void InputsTyping() {
 					});
 				} else {
 					GMI().GetConfig().client_crypt_key.Set("");
-					AddClientInfo("Encryption has been disabled.");
+					PrintC("Encryption has been disabled.");
 					Reminder();
 				}
 			} else {
-				AddClientInfo(std::string("Encryption: ")
+				PrintC(std::string("Encryption: ")
 					+ (GMI().GetConfig().client_crypt_key.Get().empty() ? "disabled" : "enabled"));
 			}
 		// command: !connect
@@ -1368,7 +1370,7 @@ void InputsTyping() {
 			if (name != "")
 				GMI().SetChatName(name == "<unknown>" ? "" : name);
 			name = GMI().GetChatName();
-			AddClientInfo("Name: " + (name == "" ? "<unknown>" : name));
+			PrintC("Name: " + (name == "" ? "<unknown>" : name));
 		// command: !chat
 		} else if (command == "!chat") {
 			std::string visibility_name = fnd.next(" ");
@@ -1376,7 +1378,7 @@ void InputsTyping() {
 				if (SetChatVisibility(visibility_name))
 					GMI().GetConfig().client_chat_visibility.Set(visibility_name);
 			}
-			AddClientInfo("Visibility: " + \
+			PrintC("Visibility: " + \
 				Messages::VisibilityNames.find(chat_visibility)->second);
 			if (visibility_name == "CRYPT") {
 				std::string chat_crypt_password = fnd.next(" ");
@@ -1398,7 +1400,7 @@ void InputsTyping() {
 					flags += it.first + " ";
 			if (flags.size() > 0)
 				flags.erase(flags.size() - 1);
-			AddClientInfo("Flags: " + flags);
+			PrintC("Flags: " + flags);
 		// command: !immersive
 		} else if (command == "!immersive" || command == "!imm") {
 			chat_box->ToggleImmersiveMode();
@@ -1412,29 +1414,29 @@ void InputsTyping() {
 		// command: !debug
 		} else if (command == "!debug" && cheat_flag) {
 			Player::debug_flag = true;
-			AddClientInfo("TestPlay mode: enabled");
-			AddClientInfo("You can focus on the ChatUi by selecting the 'Chat' in the debug menu.");
+			PrintC("TestPlay mode: enabled");
+			PrintC("You can focus on the ChatUi by selecting the 'Chat' in the debug menu.");
 			Scene::Push(std::make_shared<Scene_Debug>());
 		// command: !getvar
 		} else if (command == "!getvar" && cheat_flag) {
 			std::string var_id = fnd.next(" ");
-			AddClientInfo("getvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(atoi(var_id.c_str()))));
+			PrintC("getvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(atoi(var_id.c_str()))));
 		// command: !setvar
 		} else if (command == "!setvar" && cheat_flag) {
 			std::string var_id = fnd.next(" ");
 			Main_Data::game_variables->Set(atoi(var_id.c_str()), atoi(fnd.next(" ").c_str()));
 			Game_Map::SetNeedRefresh(true);
-			AddClientInfo("setvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(atoi(var_id.c_str()))));
+			PrintC("setvar #" + var_id + " = " + std::to_string(Main_Data::game_variables->Get(atoi(var_id.c_str()))));
 		// command: !getsw
 		} else if (command == "!getsw" && cheat_flag) {
 			std::string sw_id = fnd.next(" ");
-			AddClientInfo("getsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
+			PrintC("getsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
 		// command: !setsw
 		} else if (command == "!setsw" && cheat_flag) {
 			std::string sw_id = fnd.next(" ");
 			Main_Data::game_switches->Set(atoi(sw_id.c_str()), atoi(fnd.next(" ").c_str()));
 			Game_Map::SetNeedRefresh(true);
-			AddClientInfo("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
+			PrintC("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
 		// command: !debugtext
 		} else if (command == "!debugtext" || command == "!dt") {
 			std::string name = fnd.next(" ");
@@ -1446,7 +1448,7 @@ void InputsTyping() {
 					Graphics::GetDebugTextOverlay().ShowItem("99_downloading");
 				else
 					Graphics::GetDebugTextOverlay().HideItem("99_downloading");
-				AddClientInfo(std::string("DebugText: ") + (debugtext_downloading_flag ? "enabled" : "disabled"));
+				PrintC(std::string("DebugText: ") + (debugtext_downloading_flag ? "enabled" : "disabled"));
 			} else
 				GMI().ToggleDebugTextMode(Game_Multiplayer::DebugTextMode::PLAYER_BASIC);
 		// command: !help
@@ -1572,20 +1574,39 @@ void ChatUi::GotMessage(int visibility, int room_id,
 	auto it = Messages::VisibilityNames.find(v);
 	if (it != Messages::VisibilityNames.end())
 		vtext = it->second;
-	AddLogEntry("<", name, "> ", vtext, " #" + std::to_string(room_id),
-			1, 0, 1, 2, 1, v, sys_name);
-	AddLogEntry("\u00A0", message, "", "", "",
-			0, -1, 0, 0, 0, v, "");
-	AddNotificationLogEntry("<", name, "> ", message, "",
-			1, 0, 1, -1, 0, v, sys_name);
-	Output::InfoNoChat("Chat: {} [{}, {}]: {}", name, vtext, room_id, message);
+	std::time_t t = std::time(nullptr);
+	std::string time = Utils::FormatDate(std::localtime(&t), "%H:%M:%S");
+	std::string room = std::to_string(room_id);
+	AddLogEntry(ChatText{
+		{"<", tcfg.color_log_divider},
+		{name, tcfg.color_log_name},
+		{"> ", tcfg.color_log_divider},
+		{vtext, tcfg.color_log_visibility},
+		{" #" + room, tcfg.color_log_room}
+	}, v, sys_name);
+	AddLogEntry(ChatText{
+		{"\u00A0", 0}, {message, tcfg.color_log_message},
+		{" \uFF00[", tcfg.color_log_divider},
+		{time, tcfg.color_log_time},
+		{"]", tcfg.color_log_divider}
+	}, v, "");
+	AddNotificationLogEntry(ChatText{
+		{"<", tcfg.color_log_divider},
+		{name, tcfg.color_log_name},
+		{"> ", tcfg.color_log_divider},
+		{message, tcfg.color_log_message}
+	}, v, sys_name);
+	time = Utils::FormatDate(std::localtime(&t), "%Y-%m-%d %H:%M:%S");
+	Output::InfoNoChat("[{}] Chat: {} [{}, {}]: {}", time, name, vtext, room_id, message);
 }
 
 void ChatUi::GotInfo(std::string message) {
-	if (chat_box == nullptr)
-		return;
-	AddLogEntry("", message, "", Messages::CV_LOCAL);
-	AddNotificationLogEntry("", message, "", Messages::CV_LOCAL);
+	if (chat_box == nullptr) return;
+	PrintD(message, true);
+}
+
+void ChatUi::SetTextConfig(ChatUiTextConfig tcfg) {
+	::tcfg = tcfg;
 }
 
 void ChatUi::SetStatusConnection(bool connected, bool connecting) {

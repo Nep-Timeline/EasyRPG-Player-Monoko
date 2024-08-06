@@ -43,7 +43,10 @@ void DebugTextOverlay::Draw(Bitmap& dst) {
 					Rect line_rect = Text::GetSize(*Font::DefaultBitmapFont(), line);
 					Rect fillrect(0, y, line_rect.width, line_rect.height);
 					bitmap->FillRect(fillrect, Color(0, 0, 0, 102));
-					Text::Draw(*bitmap, 0, y, *Font::Default(), *Cache::SystemOrBlack(), 0, line);
+					if (color > -1)
+						Text::Draw(*bitmap, 0, y, *Font::Default(), *Cache::SystemOrBlack(), color, line);
+					else
+						Text::Draw(*bitmap, 0, y, *Font::DefaultBitmapFont(), Color(255, 255, 255, 255), line);
 					y += line_rect.height;
 				}
 			}
@@ -119,4 +122,8 @@ void DebugTextOverlay::RemoveItem(const std::string& name) {
 	item.show = false;
 	item.dirty = true;
 	item.remove = true;
+}
+
+void DebugTextOverlay::SetColor(int color) {
+	this->color = color;
 }

@@ -179,43 +179,69 @@ uint32_t GetNumHash(int num) {
 }
 
 void Setup() {
+	auto GetNumber = [](const picojson::object& obj, auto& var, const std::string& name) {
+		if (const auto& it = obj.find(name); it != obj.end() && it->second.is<double>())
+			var = it->second.get<double>();
+	};
 	auto LoadTextConfig = [&]() {
 		Filesystem_Stream::InputStream is = FileFinder::OpenText("multiplayer.json");
 		picojson::value v;
 		picojson::parse(v, is);
 		if (!v.is<picojson::object>()) return;
 		std::map cfg = v.get<picojson::object>();
-		if (cfg.find("game_name") != cfg.end() && cfg["game_name"].is<std::string>()) {
-			game_name = cfg["game_name"].to_str();
+		if (cfg.find("name") != cfg.end() && cfg["name"].is<std::string>()) {
+			game_name = cfg["name"].to_str();
 			UpdateClientHash();
 		}
-		if (cfg.find("picture_names") != cfg.end() && cfg["picture_names"].is<picojson::array>()) {
-			for (const auto& value : cfg["picture_names"].get<picojson::array>()) {
-				if (!value.is<std::string>()) break;
-				global_sync_picture_names.emplace_back(value.to_str());
+		if (cfg.find("sync") != cfg.end() && cfg["sync"].is<picojson::object>()) {
+			std::map obj = cfg["sync"].get<picojson::object>();
+			if (obj.find("picture_names") != obj.end() && obj["picture_names"].is<picojson::array>()) {
+				for (const auto& value : obj["picture_names"].get<picojson::array>()) {
+					if (!value.is<std::string>()) break;
+					global_sync_picture_names.emplace_back(value.to_str());
+				}
+			}
+			if (obj.find("picture_prefixes") != obj.end() && obj["picture_prefixes"].is<picojson::array>()) {
+				for (const auto& value : obj["picture_prefixes"].get<picojson::array>()) {
+					if (!value.is<std::string>()) break;
+					global_sync_picture_prefixes.emplace_back(value.to_str());
+				}
+			}
+			if (obj.find("virtual_3d_maps") != obj.end() && obj["virtual_3d_maps"].is<picojson::array>()) {
+				for (const auto& value : obj["virtual_3d_maps"].get<picojson::array>()) {
+					if (!value.is<picojson::object>()) continue;
+					std::map obj = value.get<picojson::object>();
+					int map_id{-1}, event_id{-1}, terrain_id{-1}, switch_id{-1};
+					GetNumber(obj, map_id, "map_id");
+					GetNumber(obj, event_id, "event_id");
+					GetNumber(obj, terrain_id, "terrain_id");
+					GetNumber(obj, switch_id, "switch_id");
+					virtual_3d_map_configs[map_id] = { event_id, terrain_id, switch_id };
+				}
 			}
 		}
-		if (cfg.find("picture_prefixes") != cfg.end() && cfg["picture_prefixes"].is<picojson::array>()) {
-			for (const auto& value : cfg["picture_prefixes"].get<picojson::array>()) {
-				if (!value.is<std::string>()) break;
-				global_sync_picture_prefixes.emplace_back(value.to_str());
-			}
+		if (cfg.find("debugtext") != cfg.end() && cfg["debugtext"].is<picojson::object>()) {
+			std::map obj = cfg["debugtext"].get<picojson::object>();
+			if (obj.find("color") != obj.end() && obj["color"].is<double>())
+				Graphics::GetDebugTextOverlay().SetColor(obj["color"].get<double>());
 		}
-		if (cfg.find("virtual_3d_maps") != cfg.end() && cfg["virtual_3d_maps"].is<picojson::array>()) {
-			for (const auto& value : cfg["virtual_3d_maps"].get<picojson::array>()) {
-				if (!value.is<picojson::object>()) continue;
-				std::map obj = value.get<picojson::object>();
-				int map_id{-1}, event_id{-1}, terrain_id{-1}, switch_id{-1};
-				if (obj.find("map_id") != obj.end() && obj["map_id"].is<double>())
-					map_id = obj["map_id"].get<double>();
-				if (obj.find("event_id") != obj.end() && obj["event_id"].is<double>())
-					event_id = obj["event_id"].get<double>();
-				if (obj.find("terrain_id") != obj.end() && obj["terrain_id"].is<double>())
-					terrain_id = obj["terrain_id"].get<double>();
-				if (obj.find("switch_id") != obj.end() && obj["switch_id"].is<double>())
-					switch_id = obj["switch_id"].get<double>();
-				virtual_3d_map_configs[map_id] = { event_id, terrain_id, switch_id };
-			}
+		if (cfg.find("chatui") != cfg.end() && cfg["chatui"].is<picojson::object>()) {
+			std::map obj = cfg["chatui"].get<picojson::object>();
+			ChatUiTextConfig cfg;
+			GetNumber(obj, cfg.color_status_connection, "color_status_connection");
+			GetNumber(obj, cfg.color_status_room, "color_status_room");
+			GetNumber(obj, cfg.color_log_divider, "color_log_divider");
+			GetNumber(obj, cfg.color_log_name, "color_log_name");
+			GetNumber(obj, cfg.color_log_visibility, "color_log_visibility");
+			GetNumber(obj, cfg.color_log_room, "color_log_room");
+			GetNumber(obj, cfg.color_log_time, "color_log_time");
+			GetNumber(obj, cfg.color_log_message, "color_log_message");
+			GetNumber(obj, cfg.color_log_truncatechar, "color_log_truncatechar");
+			GetNumber(obj, cfg.color_typebox, "color_typebox");
+			GetNumber(obj, cfg.color_print_message, "color_print_message");
+			GetNumber(obj, cfg.color_print_label, "color_print_label");
+			GetNumber(obj, cfg.color_print_label_message, "color_print_label_message");
+			CUI().SetTextConfig(cfg);
 		}
 	};
 	if (Player::game_config.engine != Player::EngineNone) {
