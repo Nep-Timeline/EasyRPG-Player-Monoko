@@ -53,6 +53,7 @@ public:
 	void ToggleDebugTextMode(DebugTextMode mode);
 
 	// Config
+	void GameLoaded();
 	void SetRemoteAddress(std::string address);
 	void SetConfig(const Game_ConfigMultiplayer& cfg);
 	Game_ConfigMultiplayer& GetConfig();

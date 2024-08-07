@@ -245,6 +245,8 @@ void Setup() {
 		}
 	};
 	if (Player::game_config.engine != Player::EngineNone) {
+		game_name = Player::game_title; // Try to give a name, but it may not be effective
+
 #ifndef EMSCRIPTEN
 		LoadTextConfig();
 #else
@@ -816,6 +818,10 @@ void Game_Multiplayer::ToggleDebugTextMode(DebugTextMode mode) {
 
 /** Config */
 
+void Game_Multiplayer::GameLoaded() {
+	Setup();
+}
+
 void Game_Multiplayer::SetRemoteAddress(std::string address) {
 	cfg.client_remote_address.Set(address);
 	connection.SetAddress(cfg.client_remote_address.Get());
@@ -1163,11 +1169,6 @@ int Game_Multiplayer::GetTerrainTag(int original_terrain_id, int x, int y) {
  */
 
 void Game_Multiplayer::Update() {
-	if (update_counter < 30) {
-		++update_counter;
-		if (update_counter == 30)
-			Setup();
-	}
 	if (active) {
 		connection.Receive();
 	}

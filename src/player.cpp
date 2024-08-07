@@ -890,6 +890,8 @@ void Player::CreateGameObjects() {
 	if (Player::IsPatchKeyPatch()) {
 		Main_Data::game_ineluki->ExecuteScriptList(FileFinder::Game().FindFile("autorun.script"));
 	}
+
+	GMI().GameLoaded();
 }
 
 bool Player::ChangeResolution(int width, int height) {

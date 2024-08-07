@@ -1497,7 +1497,7 @@ void Update() {
 				chat_box = std::make_unique<DrawableChatUi>();
 				ShowWelcome();
 				SetChatVisibility(GMI().GetConfig().client_chat_visibility.Get());
-			} else if (counter == 8) {
+			} else if (counter == 8) { // 8: do something after the original screen adjustment is completed
 				int splitscreen_mode = GMI().GetConfig().client_chat_splitscreen_mode.Get();
 				if (splitscreen_mode)
 					chat_box->SetSplitScreenMode(splitscreen_mode, splitscreen_mode == 2, false);
