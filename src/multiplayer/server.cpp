@@ -30,11 +30,9 @@
 #ifdef SERVER
 #  include <csignal>
 #  include <getopt.h>
-#  include <fstream>
-#  include <ostream>
-#  include <istream>
-#  include <lcf/inireader.h>
 #endif
+
+static ServerConfig scfg;
 
 using namespace Multiplayer;
 using namespace Messages;
@@ -435,7 +433,7 @@ public:
 	}
 
 	void Open() {
-		connection.SetReadTimeout(server->GetConfig().no_heartbeats.Get() ? 0 : 6000);
+		connection.SetReadTimeout(scfg.no_heartbeats ? 0 : 6000);
 		connection.Open();
 	}
 
@@ -561,7 +559,7 @@ void ServerMain::Start(bool wait_thread) {
 
 	auto CreateServerSideClient = [this](std::unique_ptr<Socket> socket) {
 		std::lock_guard lock(m_mutex);
-		if (clients.size() >= cfg.server_max_users.Get()) {
+		if (clients.size() >= scfg.max_users) {
 			socket->OnInfo = [](std::string_view m) {
 				OutputMt::Info("S: {} (Too many users)", m);
 			};
@@ -575,7 +573,10 @@ void ServerMain::Start(bool wait_thread) {
 		}
 	};
 
-	if (cfg.server_bind_address_2.Get() != "") {
+	if (!scfg.bind_address_2.empty()) {
+		std::string addr_host_2;
+		uint16_t addr_port_2{ 6500 };
+		Connection::ParseAddress(scfg.bind_address_2, addr_host_2, addr_port_2);
 		server_listener_2.reset(new ServerListener(addr_host_2, addr_port_2));
 		server_listener_2->OnInfo = [](std::string_view m) { OutputMt::Info("S: {}", m); };
 		server_listener_2->OnWarning = [](std::string_view m) { OutputMt::Warning("S: {}", m); };
@@ -583,6 +584,9 @@ void ServerMain::Start(bool wait_thread) {
 		server_listener_2->Start();
 	}
 
+	std::string addr_host;
+	uint16_t addr_port{ 6500 };
+	Connection::ParseAddress(scfg.bind_address, addr_host, addr_port);
 	server_listener.reset(new ServerListener(addr_host, addr_port));
 	server_listener->OnInfo = [](std::string_view m) { OutputMt::Info("S: {}", m); };
 	server_listener->OnWarning = [](std::string_view m) { OutputMt::Warning("S: {}", m); };
@@ -609,16 +613,14 @@ void ServerMain::Stop() {
 	Output::Info("S: Stopped");
 }
 
-void ServerMain::SetConfig(const Game_ConfigMultiplayer& _cfg) {
-	cfg = _cfg;
-	Connection::ParseAddress(cfg.server_bind_address.Get(), addr_host, addr_port);
-	if (cfg.server_bind_address_2.Get() != "")
-		Connection::ParseAddress(cfg.server_bind_address_2.Get(), addr_host_2, addr_port_2);
+#ifndef SERVER
+void ServerMain::SetConfig(const Game_ConfigMultiplayer& cfg) {
+	scfg.no_heartbeats = cfg.no_heartbeats.Get();
+	scfg.bind_address = cfg.server_bind_address.Get();
+	scfg.bind_address_2 = cfg.server_bind_address_2.Get();
+	scfg.max_users = cfg.server_max_users.Get();
 }
-
-Game_ConfigMultiplayer ServerMain::GetConfig() const {
-	return cfg;
-}
+#endif
 
 static ServerMain _instance;
 
@@ -634,44 +636,30 @@ ServerMain& Server() {
 #ifdef SERVER
 int main(int argc, char *argv[])
 {
-	Game_ConfigMultiplayer cfg;
-	std::string config_path{""};
+	// Character followed by a colon requires an argument
+	const char* short_opts = "na:A:U:";
 
-	const char* short_opts = "a:A:nc:";
 	const option long_opts[] = {
+		{"no-heartbeats", no_argument, nullptr, 'n'},
 		{"bind-address", required_argument, nullptr, 'a'},
 		{"bind-address-2", required_argument, nullptr, 'A'},
-		{"no-heartbeats", no_argument, nullptr, 'n'},
-		{"config-path", required_argument, nullptr, 'c'},
+		{"max-users", required_argument, nullptr, 'U'},
 		{nullptr, no_argument, nullptr, 0}
 	};
 
 	while (true) {
 		const auto opt = getopt_long(argc, argv, short_opts, long_opts, nullptr);
-		if (opt == 'a')
-			cfg.server_bind_address.Set(optarg);
+		if (opt == 'n')
+			scfg.no_heartbeats = true;
+		else if (opt == 'a')
+			scfg.bind_address = optarg;
 		else if (opt == 'A')
-			cfg.server_bind_address_2.Set(optarg);
-		else if (opt == 'n')
-			cfg.no_heartbeats.Set(true);
-		else if (opt == 'c')
-			config_path = optarg;
+			scfg.bind_address_2 = optarg;
+		else if (opt == 'U')
+			scfg.max_users = atoi(optarg);
 		else
 			break;
 	}
-
-	if (config_path != "") {
-		// create file if not exists
-		{ std::ofstream ofs(config_path, std::ios::app); }
-		std::ifstream ifs(config_path);
-		std::istream& is = ifs;
-		lcf::INIReader ini(is);
-		cfg.server_bind_address.FromIni(ini);
-		cfg.server_bind_address_2.FromIni(ini);
-		cfg.server_max_users.FromIni(ini);
-	}
-
-	Server().SetConfig(cfg);
 
 	auto signal_handler = [](int signal) {
 		Server().Stop();

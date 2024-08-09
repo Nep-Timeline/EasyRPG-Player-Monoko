@@ -19,6 +19,10 @@
 #include <lcf/data.h>
 #include <lcf/reader_util.h>
 
+#ifdef HAVE_NLOHMANN_JSON
+#  include <nlohmann/json.hpp>
+#endif
+
 #include "game_multiplayer.h"
 #include "../output.h"
 #include "../game_player.h"
@@ -52,10 +56,6 @@
 #include "messages.h"
 #include "output_mt.h"
 #include "util/strfnd.h"
-
-#define PICOJSON_USE_LOCALE 0
-#define PICOJSON_ASSERT(e) do { if (! (e)) assert(false && #e); } while (0)
-#include "../external/picojson.h"
 
 #ifndef EMSCRIPTEN
 #  include "server.h"
@@ -179,38 +179,40 @@ uint32_t GetNumHash(int num) {
 }
 
 void Setup() {
-	auto GetNumber = [](const picojson::object& obj, auto& var, const std::string& name) {
-		if (const auto& it = obj.find(name); it != obj.end() && it->second.is<double>())
-			var = it->second.get<double>();
+#ifdef HAVE_NLOHMANN_JSON
+	auto GetNumber = [](const nlohmann::json& obj, auto& var, const std::string& name) {
+		if (obj.contains(name) && obj[name].is_number()) var = obj[name].get<double>();
 	};
 	auto LoadTextConfig = [&]() {
 		Filesystem_Stream::InputStream is = FileFinder::OpenText("multiplayer.json");
-		picojson::value v;
-		picojson::parse(v, is);
-		if (!v.is<picojson::object>()) return;
-		std::map cfg = v.get<picojson::object>();
-		if (cfg.find("name") != cfg.end() && cfg["name"].is<std::string>()) {
-			game_name = cfg["name"].to_str();
+		if (!is) return;
+
+		const nlohmann::json& cfg = nlohmann::json::parse(is, nullptr, false);
+		if (cfg.is_discarded()) return;
+
+		if (!cfg.is_object()) return;
+
+		if (cfg.contains("name") && cfg["name"].is_string()) {
+			game_name = cfg["name"].get<std::string>();
 			UpdateClientHash();
 		}
-		if (cfg.find("sync") != cfg.end() && cfg["sync"].is<picojson::object>()) {
-			std::map obj = cfg["sync"].get<picojson::object>();
-			if (obj.find("picture_names") != obj.end() && obj["picture_names"].is<picojson::array>()) {
-				for (const auto& value : obj["picture_names"].get<picojson::array>()) {
-					if (!value.is<std::string>()) break;
-					global_sync_picture_names.emplace_back(value.to_str());
+		if (cfg.contains("sync") && cfg["sync"].is_object()) {
+			const nlohmann::json& obj = cfg["sync"];
+			if (obj.contains("picture_names") && obj["picture_names"].is_array()) {
+				for (const auto& value : obj["picture_names"]) {
+					if (!value.is_string()) break;
+					global_sync_picture_names.emplace_back(value.get<std::string>());
 				}
 			}
-			if (obj.find("picture_prefixes") != obj.end() && obj["picture_prefixes"].is<picojson::array>()) {
-				for (const auto& value : obj["picture_prefixes"].get<picojson::array>()) {
-					if (!value.is<std::string>()) break;
-					global_sync_picture_prefixes.emplace_back(value.to_str());
+			if (obj.contains("picture_prefixes") && obj["picture_prefixes"].is_array()) {
+				for (const auto& value : obj["picture_prefixes"]) {
+					if (!value.is_string()) break;
+					global_sync_picture_prefixes.emplace_back(value.get<std::string>());
 				}
 			}
-			if (obj.find("virtual_3d_maps") != obj.end() && obj["virtual_3d_maps"].is<picojson::array>()) {
-				for (const auto& value : obj["virtual_3d_maps"].get<picojson::array>()) {
-					if (!value.is<picojson::object>()) continue;
-					std::map obj = value.get<picojson::object>();
+			if (obj.contains("virtual_3d_maps") && obj["virtual_3d_maps"].is_array()) {
+				for (const auto& obj : obj["virtual_3d_maps"]) {
+					if (!obj.is_object()) continue;
 					int map_id{-1}, event_id{-1}, terrain_id{-1}, switch_id{-1};
 					GetNumber(obj, map_id, "map_id");
 					GetNumber(obj, event_id, "event_id");
@@ -220,13 +222,13 @@ void Setup() {
 				}
 			}
 		}
-		if (cfg.find("debugtext") != cfg.end() && cfg["debugtext"].is<picojson::object>()) {
-			std::map obj = cfg["debugtext"].get<picojson::object>();
-			if (obj.find("color") != obj.end() && obj["color"].is<double>())
-				Graphics::GetDebugTextOverlay().SetColor(obj["color"].get<double>());
+		if (cfg.contains("debugtext") && cfg["debugtext"].is_object()) {
+			const nlohmann::json& obj = cfg["debugtext"];
+			if (obj.contains("color") && obj["color"].is_number())
+				Graphics::GetDebugTextOverlay().SetColor(obj["color"].get<int>());
 		}
-		if (cfg.find("chatui") != cfg.end() && cfg["chatui"].is<picojson::object>()) {
-			std::map obj = cfg["chatui"].get<picojson::object>();
+		if (cfg.contains("chatui") && cfg["chatui"].is_object()) {
+			const nlohmann::json& obj = cfg["chatui"];
 			ChatUiTextConfig cfg;
 			GetNumber(obj, cfg.color_status_connection, "color_status_connection");
 			GetNumber(obj, cfg.color_status_room, "color_status_room");
@@ -256,8 +258,9 @@ void Setup() {
 		});
 		request->SetImportantFile(true); // Continue the scene after waiting
 		request->Start();
-#endif
+#endif // else EMSCRIPTEN
 	}
+#endif // ifdef HAVE_NLOHMANN_JSON
 }
 
 /**

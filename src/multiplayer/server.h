@@ -25,7 +25,17 @@
 #include <condition_variable>
 #include <mutex>
 #include "messages.h"
-#include "../game_config.h"
+
+#ifndef SERVER
+#  include "../game_config.h"
+#endif
+
+struct ServerConfig {
+	bool no_heartbeats = false;
+	std::string bind_address = "[::]:6500";
+	std::string bind_address_2 = "";
+	int max_users = 100;
+};
 
 class ServerListener;
 class ServerSideClient;
@@ -40,24 +50,18 @@ class ServerMain {
 	std::unique_ptr<ServerListener> server_listener;
 	std::unique_ptr<ServerListener> server_listener_2;
 
-	std::string addr_host;
-	std::string addr_host_2;
-	uint16_t addr_port{ 6500 };
-	uint16_t addr_port_2{ 6500 };
-
 	std::queue<std::unique_ptr<DataToSend>> m_data_to_send_queue;
 	std::condition_variable m_data_to_send_queue_cv;
 
 	std::mutex m_mutex;
 
-	Game_ConfigMultiplayer cfg;
-
 public:
 	void Start(bool wait_thread = false);
 	void Stop();
 
+#ifndef SERVER
 	void SetConfig(const Game_ConfigMultiplayer& _cfg);
-	Game_ConfigMultiplayer GetConfig() const;
+#endif
 
 	void ForEachClient(const std::function<void(ServerSideClient&)>& callback);
 	void DeleteClient(const int id);
