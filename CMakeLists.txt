@@ -14,6 +14,9 @@ include(PlayerBuildType)
 include(PlayerMisc)
 include(GetGitRevisionDescription)
 
+# Dependencies provided by CMake Presets
+list(APPEND CMAKE_PREFIX_PATH "${PLAYER_PREFIX_PATH_APPEND}")
+
 # C++17 is required
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -427,6 +430,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/window_input_settings.h
 	src/window_item.cpp
 	src/window_item.h
+	src/window_interpreter.cpp
+	src/window_interpreter.h
 	src/window_keyboard.cpp
 	src/window_keyboard.h
 	src/window_menustatus.cpp
@@ -461,6 +466,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/window_skill.h
 	src/window_skillstatus.cpp
 	src/window_skillstatus.h
+	src/window_stringview.cpp
+	src/window_stringview.h
 	src/window_targetstatus.cpp
 	src/window_targetstatus.h
 	src/window_teleport.cpp
@@ -567,12 +574,12 @@ if(NOT GIT_TAG)
 			list(GET GIT_DESCRIPTION 2 GIT_HASH)
 			string(APPEND GIT_MESSAGE "${GIT_COMMITS} commits since tag \"${GIT_TAG}\", ")
 			string(PREPEND GIT_COMMITS "+")
+			# strip the g prefix
+			string(SUBSTRING ${GIT_HASH} 1 -1 GIT_HASH)
 		else()
 			# no tags found, only hash
 			list(GET GIT_DESCRIPTION 0 GIT_HASH)
 		endif()
-		# strip the g prefix
-		string(SUBSTRING ${GIT_HASH} 1 -1 GIT_HASH)
 		set(PLAYER_VERSION_GIT "git${GIT_COMMITS}@${GIT_HASH}")
 		string(APPEND GIT_MESSAGE "object hash is ${GIT_HASH}")
 		git_local_changes(GIT_DIRTY)
@@ -647,6 +654,10 @@ if(${PLAYER_TARGET_PLATFORM} STREQUAL "SDL2")
 		target_compile_definitions(${PROJECT_NAME} PUBLIC PLAYER_NINTENDO)
 		target_sources(${PROJECT_NAME} PRIVATE
 			src/platform/wiiu/input_buttons.cpp)
+	endif()
+
+	if(WIN32)
+		target_link_libraries(${PROJECT_NAME} "Dwmapi")
 	endif()
 elseif(${PLAYER_TARGET_PLATFORM} STREQUAL "SDL1")
 	target_sources(${PROJECT_NAME} PRIVATE
@@ -847,7 +858,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 	set(PLAYER_JS_GAME_URL "games/" CACHE STRING "Game URL/directory where the web player searches for games")
 	set(PLAYER_JS_OUTPUT_NAME "easyrpg-player" CACHE STRING "Output name of the js, html and wasm files")
 	set_property(SOURCE src/async_handler.cpp APPEND PROPERTY COMPILE_DEFINITIONS "EM_GAME_URL=\"${PLAYER_JS_GAME_URL}\"")
-	target_sources(${PROJECT_NAME} PRIVATE src/external/picojson.h)
 endif()
 
 # Endianess check
@@ -1008,6 +1018,22 @@ player_find_package(NAME lhasa
 	DEFINITION HAVE_LHASA
 	TARGET LHASA::liblhasa
 )
+
+# json support
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+	player_find_package(NAME nlohmann_json
+		DEFINITION HAVE_NLOHMANN_JSON
+		TARGET nlohmann_json::nlohmann_json
+		REQUIRED
+	)
+else()
+	option(PLAYER_WITH_NLOHMANN_JSON "Support processing of JSON files" ON)
+	player_find_package(NAME nlohmann_json
+		CONDITION PLAYER_WITH_NLOHMANN_JSON
+		DEFINITION HAVE_NLOHMANN_JSON
+		TARGET nlohmann_json::nlohmann_json
+	)
+endif()
 
 # Sound system to use
 if(${PLAYER_TARGET_PLATFORM} STREQUAL "SDL2")
@@ -1177,7 +1203,7 @@ if(${PLAYER_AUDIO_BACKEND} MATCHES "^(SDL2|SDL1|libretro|psvita|3ds|switch|wii|a
 		player_find_package(NAME FluidLite
 			CONDITION PLAYER_WITH_FLUIDLITE
 			DEFINITION HAVE_FLUIDLITE
-			TARGET FluidLite::fluidlite)
+			TARGET "fluidlite::fluidlite;fluidlite::fluidlite-static")
 	endif()
 
 	# xmp (lite)
@@ -1662,7 +1688,7 @@ if(${PLAYER_AUDIO_BACKEND} MATCHES "^(SDL2|SDL1|libretro|psvita|3ds|switch|wii)$
 	if(TARGET FluidSynth::libfluidsynth)
 		list(APPEND MIDI_LIBS "FluidSynth")
 	endif()
-	if(TARGET FluidLite::fluidlite)
+	if(TARGET fluidlite::fluidlite OR TARGET fluidlite::fluidlite-static)
 		list(APPEND MIDI_LIBS "FluidLite")
 	endif()
 	if(TARGET WildMidi::libwildmidi OR TARGET WildMidi::libwildmidi-static)
@@ -1730,6 +1756,12 @@ if(TARGET LHASA::liblhasa)
 	message(STATUS "LZH archive support: lhasa")
 else()
 	message(STATUS "LZH archive support: No")
+endif()
+
+if(TARGET nlohmann_json::nlohmann_json)
+	message(STATUS "JSON support: nlohmann_json")
+else()
+	message(STATUS "JSON support: No")
 endif()
 
 message(STATUS "")

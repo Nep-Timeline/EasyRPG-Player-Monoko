@@ -17,6 +17,7 @@
 
 // Headers
 #include "audio.h"
+#include "audio_midi.h"
 #include "system.h"
 #include "baseui.h"
 #include "player.h"
@@ -72,8 +73,39 @@ AudioInterface::AudioInterface(const Game_ConfigAudio& cfg) : cfg(cfg) {
 Game_ConfigAudio AudioInterface::GetConfig() const {
 	auto acfg = cfg;
 	acfg.Hide();
+
+#if !defined(HAVE_FLUIDSYNTH) && !defined(HAVE_FLUIDLITE)
+	acfg.fluidsynth_midi.SetOptionVisible(false);
+	acfg.soundfont.SetOptionVisible(false);
+#endif
+#ifndef HAVE_LIBWILDMIDI
+	acfg.wildmidi_midi.SetOptionVisible(false);
+#endif
+#ifndef HAVE_NATIVE_MIDI
+	acfg.native_midi.SetOptionVisible(false);
+#endif
+#ifndef WANT_FMMIDI
+	acfg.fmmidi_midi.SetOptionVisible(false);
+#endif
+
 	vGetConfig(acfg);
 	return acfg;
+}
+
+void AudioInterface::ToggleMute() {
+	toggle_mute_flag = !toggle_mute_flag;
+	if (toggle_mute_flag) {
+		volume_se = SE_GetGlobalVolume();
+		volume_bgm = BGM_GetGlobalVolume();
+		SE_SetGlobalVolume(0);
+		BGM_SetGlobalVolume(0);
+	} else {
+		SE_SetGlobalVolume(volume_se);
+		BGM_SetGlobalVolume(volume_bgm);
+	}
+	Graphics::GetStatusTextOverlay().ShowText(
+		toggle_mute_flag ? "Muted" : "Unmuted"
+	);
 }
 
 int AudioInterface::BGM_GetGlobalVolume() const {
@@ -92,18 +124,35 @@ void AudioInterface::SE_SetGlobalVolume(int volume) {
 	cfg.sound_volume.Set(volume);
 }
 
-void AudioInterface::ToggleMute() {
-	toggle_mute_flag = !toggle_mute_flag;
-	if (toggle_mute_flag) {
-		volume_se = SE_GetGlobalVolume();
-		volume_bgm = BGM_GetGlobalVolume();
-		SE_SetGlobalVolume(0);
-		BGM_SetGlobalVolume(0);
-	} else {
-		SE_SetGlobalVolume(volume_se);
-		BGM_SetGlobalVolume(volume_bgm);
-	}
-	Graphics::GetStatusTextOverlay().ShowText(
-		toggle_mute_flag ? "Muted" : "Unmuted"
-	);
+bool AudioInterface::GetFluidsynthEnabled() const {
+	return cfg.fluidsynth_midi.Get();
+}
+
+void AudioInterface::SetFluidsynthEnabled(bool enable) {
+	cfg.fluidsynth_midi.Set(enable);
+}
+
+bool AudioInterface::GetWildMidiEnabled() const {
+	return cfg.wildmidi_midi.Get();
+}
+
+void AudioInterface::SetWildMidiEnabled(bool enable) {
+	cfg.wildmidi_midi.Set(enable);
+}
+
+bool AudioInterface::GetNativeMidiEnabled() const {
+	return cfg.native_midi.Get();
+}
+
+void AudioInterface::SetNativeMidiEnabled(bool enable) {
+	cfg.native_midi.Set(enable);
+}
+
+std::string AudioInterface::GetFluidsynthSoundfont() const {
+	return cfg.soundfont.Get();
+}
+
+void AudioInterface::SetFluidsynthSoundfont(StringView sf) {
+	cfg.soundfont.Set(ToString(sf));
+	MidiDecoder::ChangeFluidsynthSoundfont(sf);
 }

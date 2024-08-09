@@ -213,6 +213,7 @@ function launch(done) {
     // Module is ready
     easyrpgPlayer = Module;
     easyrpgPlayer.initApi();
+    focusPlayer();
 
     // Custom code here
     const textInputHelper = TextInputHelper(Module);
