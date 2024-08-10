@@ -524,7 +524,6 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 endif()
 
 add_library(${PROJECT_NAME}_server OBJECT
-	src/utils.cpp
 	src/multiplayer/connection.cpp
 	src/multiplayer/socket.cpp
 	src/multiplayer/packet.cpp
@@ -611,10 +610,13 @@ set_property(CACHE PLAYER_TARGET_PLATFORM PROPERTY STRINGS SDL2 SDL1 libretro ps
 set(PLAYER_BUILD_EXECUTABLE ON)
 set(PLAYER_TEST_LIBRARIES ${PROJECT_NAME})
 
+option(PLAYER_MULTIPLAYER "Enable Multiplayer." OFF)
+
 if(NOT BUILD_CLIENT AND BUILD_SERVER)
 	set(PLAYER_TARGET_PLATFORM OFF)
 	set(PLAYER_BUILD_EXECUTABLE OFF)
 	set(PLAYER_AUDIO_BACKEND OFF)
+	set(PLAYER_MULTIPLAYER ON)
 endif()
 
 if(ANDROID AND PLAYER_GRADLE_BUILD)
@@ -881,6 +883,8 @@ set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO")
 set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
 set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.easyrpg.player")
 
+if(BUILD_CLIENT) # BUILD_CLIENT : liblcf
+
 # liblcf
 option(PLAYER_BUILD_LIBLCF "Instead of detecting liblcf, clone liblcf into lib/liblcf and build it along with the Player. This is convenient for development." OFF)
 set(PLAYER_BUILD_LIBLCF_GIT "https://github.com/EasyRPG/liblcf.git" CACHE STRING "Git repository of liblcf to clone. Requires PLAYER_BUILD_LIBLCF=ON.")
@@ -895,9 +899,6 @@ if(PLAYER_BUILD_LIBLCF)
 			"${PLAYER_BUILD_LIBLCF_BRANCH}"
 			"${PLAYER_BUILD_LIBLCF_GIT}"
 			"${LIBLCF_PATH}")
-		include(Patch)
-		execute_process(COMMAND ${PATCH_EXECUTABLE} -p1 -d "${LIBLCF_PATH}"
-			--input=${CMAKE_CURRENT_SOURCE_DIR}/patches/liblcf.patch )
 	endif()
 	list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/liblcf/builds/cmake/Modules")
 
@@ -905,11 +906,6 @@ if(PLAYER_BUILD_LIBLCF)
 	function(add_liblcf)
 		set(BUILD_SHARED_LIBS OFF)
 		set(LIBLCF_ENABLE_INSTALL OFF)
-		if(NOT BUILD_CLIENT AND BUILD_SERVER)
-			set(LIBLCF_ENABLE_TOOLS OFF)
-			set(LIBLCF_ENABLE_TESTS OFF)
-			set(LIBLCF_FOR_SERVER ON)
-		endif()
 		add_subdirectory(${LIBLCF_PATH})
 	endfunction()
 	add_liblcf()
@@ -921,7 +917,7 @@ else()
 		REQUIRED)
 endif()
 
-option(PLAYER_MULTIPLAYER "Enable Multiplayer." OFF)
+endif() # BUILD_CLIENT : liblcf
 
 if(PLAYER_MULTIPLAYER AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 	set(LIBUV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/downloads/libuv")
@@ -1514,7 +1510,6 @@ if(BUILD_SERVER)
 	endif()
 
 	player_find_package(NAME fmt TARGET fmt::fmt REQUIRED)
-	target_link_libraries(${PROJECT_NAME}_server lcf)
 	target_link_libraries(${PROJECT_NAME}_server uv_a)
 
 	add_executable(${PROJECT_NAME}_server_exe "src/multiplayer/server.cpp")

@@ -19,9 +19,7 @@
 #include "server.h"
 #include "socket.h"
 #include <thread>
-#include "../utils.h"
 #include "output_mt.h"
-#include "util/strfnd.h"
 
 #ifndef _WIN32
 #  include <csignal>

@@ -47,8 +47,8 @@ jobs:
           export DEBIAN_FRONTEND="noninteractive"
           apt-get update
           apt-get install -yqq --no-install-recommends --no-install-suggests \
-            ca-certificates build-essential cmake ninja-build git p7zip-full \
-            libicu-dev libexpat1-dev libfmt-dev
+            ca-certificates build-essential cmake git p7zip-full \
+            libfmt-dev
 
       - name: Clone Repository
         uses: actions/checkout@v4
@@ -66,13 +66,10 @@ jobs:
       - name: Compile
         run: |
           VER="(GithubActions, `date +%Y-%m-%d`)"
-          cmake -G Ninja -B build . \
+          cmake -B build . \
             -DBUILD_CLIENT=off -DBUILD_SERVER=on \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=usr \
-            -DPLAYER_BUILD_LIBLCF=on \
-            -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
-            -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
-            -DPLAYER_MULTIPLAYER=on -DPLAYER_VERSION_APPEND="$VER"
+            -DPLAYER_VERSION_APPEND="$VER"
           cmake --build build
 
       - name: Install

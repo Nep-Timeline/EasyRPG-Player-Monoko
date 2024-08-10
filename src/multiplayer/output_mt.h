@@ -18,7 +18,11 @@
 #ifndef EP_OUTPUT_MT_H
 #define EP_OUTPUT_MT_H
 
-#include "../output.h"
+#ifndef SERVER
+#  include "../output.h"
+#else
+#  include <fmt/core.h>
+#endif
 
 /**
  * Multi-threaded Output
@@ -45,6 +49,10 @@ namespace OutputMt {
 
 	void Update();
 }
+
+#ifdef SERVER
+namespace Output = OutputMt;
+#endif
 
 template <typename FmtStr, typename... Args>
 inline void OutputMt::Info(FmtStr&& fmtstr, Args&&... args) {

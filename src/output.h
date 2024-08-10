@@ -22,13 +22,7 @@
 #include <string>
 #include <iosfwd>
 #include <fmt/core.h>
-
-#ifndef SERVER
-#  include "filesystem_stream.h"
-#else
-#  include "utils.h"
-#  include <iostream>
-#endif
+#include "filesystem_stream.h"
 
 enum class LogLevel {
 	Error,
@@ -45,7 +39,6 @@ using LogCallbackFn = void (*)(LogLevel lvl, std::string const& message,
  * Output Namespace.
  */
 namespace Output {
-#ifndef SERVER
 	/** @return the configurated log level */
 	LogLevel GetLogLevel();
 
@@ -185,22 +178,8 @@ namespace Output {
 
 	template <typename FmtStr, typename... Args>
 	void WarningNoChat(FmtStr&& fmtstr, Args&&... args);
-#else // SERVER
-	template <typename FmtStr, typename... Args>
-	void Info(FmtStr&& fmtstr, Args&&... args);
-	void InfoStr(std::string const& msg);
-
-	template <typename FmtStr, typename... Args>
-	void Warning(FmtStr&& fmtstr, Args&&... args);
-	void WarningStr(std::string const& warn);
-
-	template <typename FmtStr, typename... Args>
-	void Debug(FmtStr&& fmtstr, Args&&... args);
-	void DebugStr(std::string const& msg);
-#endif // else SERVER
 }
 
-#ifndef SERVER
 template <typename FmtStr, typename... Args>
 inline void Output::Info(FmtStr&& fmtstr, Args&&... args) {
 	InfoStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
@@ -230,35 +209,5 @@ template <typename FmtStr, typename... Args>
 inline void Output::WarningNoChat(FmtStr&& fmtstr, Args&&... args) {
 	WarningStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...), true);
 }
-#else // SERVER
-inline std::string output_time() {
-	std::time_t t = std::time(nullptr);
-	return Utils::FormatDate(std::localtime(&t), "[%Y-%m-%d %H:%M:%S] ");
-}
-
-template <typename FmtStr, typename... Args>
-inline void Output::Info(FmtStr&& fmtstr, Args&&... args) {
-	InfoStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
-}
-inline void Output::InfoStr(std::string const& msg) {
-	std::cout << output_time() << "Info: " << msg << std::endl;
-}
-
-template <typename FmtStr, typename... Args>
-inline void Output::Warning(FmtStr&& fmtstr, Args&&... args) {
-	WarningStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
-}
-inline void Output::WarningStr(std::string const& warn) {
-	std::cout << output_time() << "Warning: " << warn << std::endl;
-}
-
-template <typename FmtStr, typename... Args>
-inline void Output::Debug(FmtStr&& fmtstr, Args&&... args) {
-	DebugStr(fmt::format(std::forward<FmtStr>(fmtstr), std::forward<Args>(args)...));
-}
-inline void Output::DebugStr(std::string const& msg) {
-	std::cout << output_time() << "Debug: " << msg << std::endl;
-}
-#endif // else SERVER
 
 #endif

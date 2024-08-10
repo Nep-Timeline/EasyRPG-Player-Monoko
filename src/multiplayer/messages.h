@@ -23,8 +23,11 @@
 #include "packet.h"
 #include <memory>
 #include <map>
-#include <lcf/rpg/sound.h>
-#include "../game_pictures.h"
+
+#ifndef SERVER
+#  include <lcf/rpg/sound.h>
+#  include "../game_pictures.h"
+#endif
 
 namespace Messages {
 	enum VisibilityType : uint8_t {
@@ -434,6 +437,20 @@ namespace Messages {
 	 * Sound Effect
 	 */
 
+#ifdef SERVER
+	/** liblcf/src/generated/lcf/rpg/sound.h */
+	namespace lcf {
+	namespace rpg {
+		struct Sound {
+			std::string name = "(OFF)";
+			int32_t volume = 100;
+			int32_t tempo = 100;
+			int32_t balance = 50;
+		};
+	} // namespace rpg
+	} // namespace lcf
+#endif
+
 	class SoundEffectPacket : public PlayerPacket {
 	public:
 		constexpr static uint8_t packet_type{ PT_SOUND_EFFECT };
@@ -460,6 +477,35 @@ namespace Messages {
 	/**
 	 * Base Class: Picture
 	 */
+
+#ifdef SERVER
+	/** player/src/game_pictures.h */
+	namespace Game_Pictures {
+		struct Params {
+			int position_x = 0;
+			int position_y = 0;
+			int top_trans = 0;
+			int bottom_trans = 0;
+			int red = 100;
+			int green = 100;
+			int blue = 100;
+			int saturation = 100;
+			int effect_mode = 0;
+			int effect_power = 0;
+			// Extensions
+			int magnify_width = 100;
+			int magnify_height = 100;
+		};
+		struct ShowParams : Params {
+			std::string name;
+			bool use_transparent_color = false;
+			bool fixed_to_map = false;
+		};
+		struct MoveParams : Params {
+			int duration = 0;
+		};
+	};
+#endif
 
 	class PicturePacket : public PlayerPacket {
 	public:
