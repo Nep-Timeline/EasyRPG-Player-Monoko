@@ -57,6 +57,8 @@ public:
 	void Receive();
 	void FlushQueue();
 
+	void SetRoomPacketType(int type) { room_packet_type = type; }
+
 private:
 	Game_ConfigMultiplayer* cfg;
 
@@ -79,6 +81,8 @@ private:
 	void HandleOpen();
 	void HandleCloseOrTerm(bool terminated = false);
 	void HandleData(std::string_view);
+
+	uint8_t room_packet_type;
 };
 
 #endif

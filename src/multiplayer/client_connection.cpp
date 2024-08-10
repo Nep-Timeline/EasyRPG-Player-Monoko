@@ -18,7 +18,6 @@
 
 #include <thread>
 #include "client_connection.h"
-#include "messages.h"
 #include "output_mt.h"
 
 #ifndef EMSCRIPTEN
@@ -285,7 +284,7 @@ void ClientConnection::Receive() {
 }
 
 /**
- * Here are the four different states of (e->GetType() != RoomPacket::packet_type) == include:
+ * Here are the four different states of (e->GetType() != room_packet_type) == include:
  *  1. true false: Collect other_pkt.
  *  2. false false: Convert from other_pkt to room_pkt and drain other_pkt(s).
  *  3. false true: Collect room_pkt.
@@ -298,7 +297,7 @@ void ClientConnection::FlushQueue() {
 		std::string bulk;
 		while (!m_queue.empty()) {
 			const auto& e = m_queue.front();
-			if ((e->GetType() != Messages::RoomPacket::packet_type) == include)
+			if ((e->GetType() != room_packet_type) == include)
 				break;
 			std::string data = e->ToBytes(Connection::GetCryptKey());
 			if (bulk.size() + data.size() > QUEUE_MAX_BULK_SIZE) {

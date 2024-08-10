@@ -20,11 +20,12 @@
 #define EP_SERVER_H
 
 #include <memory>
-#include <map>
+#include <unordered_map>
+#include <functional>
 #include <queue>
 #include <condition_variable>
 #include <mutex>
-#include "messages.h"
+#include "chat.h"
 
 #ifndef SERVER
 #  include "../game_config.h"
@@ -66,7 +67,7 @@ public:
 	void ForEachClient(const std::function<void(ServerSideClient&)>& callback);
 	void DeleteClient(const int id);
 	void SendTo(const int from_client_id, const int to_client_id,
-		const Messages::VisibilityType visibility, std::string_view data,
+		const Chat::VisibilityType visibility, std::string_view data,
 		const bool return_flag = false);
 };
 

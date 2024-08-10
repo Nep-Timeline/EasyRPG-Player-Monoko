@@ -19,10 +19,7 @@
 #ifndef EP_MESSAGES_H
 #define EP_MESSAGES_H
 
-#include "connection.h"
 #include "packet.h"
-#include <memory>
-#include <map>
 
 #ifndef SERVER
 #  include <lcf/rpg/sound.h>
@@ -30,25 +27,6 @@
 #endif
 
 namespace Messages {
-	enum VisibilityType : uint8_t {
-		CV_NULL = 0,
-		CV_LOCAL = 1,
-		CV_GLOBAL = 2,
-		CV_CRYPT = 4
-	};
-
-	static const std::map<VisibilityType, std::string> VisibilityNames = {
-		{ CV_LOCAL, "LOCAL" },
-		{ CV_GLOBAL, "GLOBAL" },
-		{ CV_CRYPT, "CRYPT" }
-	};
-
-	static const std::map<std::string, VisibilityType> VisibilityValues = {
-		{ "LOCAL", CV_LOCAL },
-		{ "GLOBAL", CV_GLOBAL },
-		{ "CRYPT", CV_CRYPT }
-	};
-
 	enum PacketType : uint8_t {
 		PT_HEARTBEAT = 0x01, PT_CLIENT_HELLO = 0x02,
 		PT_ROOM = 0x22, PT_JOIN = 0x23, PT_LEAVE = 0x24,

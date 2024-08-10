@@ -475,6 +475,8 @@ bool IsPictureSynced(int pic_id, Game_Pictures::ShowParams& params) {
 }
 
 void InitConnection() {
+	connection.SetRoomPacketType(RoomPacket::packet_type);
+
 	using SystemMessage = ClientConnection::SystemMessage;
 	using Connection = Multiplayer::Connection;
 

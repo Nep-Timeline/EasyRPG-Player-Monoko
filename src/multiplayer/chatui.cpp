@@ -42,7 +42,7 @@
 #include "game_multiplayer.h"
 #include "util/strfnd.h"
 #include "util/crypto.h"
-#include "messages.h"
+#include "chat.h"
 
 #ifndef EMSCRIPTEN
 #  include "server.h"
@@ -50,7 +50,7 @@
 
 namespace {
 
-using VisibilityType = Messages::VisibilityType;
+using VisibilityType = Chat::VisibilityType;
 
 ChatUiTextConfig tcfg;
 
@@ -197,7 +197,7 @@ class DrawableChatLog : public Drawable {
 	Window_Base scroll_box; // box used as rendered design for a scrollbar
 	int scroll_position = 0;
 	unsigned int scroll_content_height = 0; // total height of scrollable message log
-	unsigned short visibility_flags = Messages::CV_LOCAL | Messages::CV_GLOBAL | Messages::CV_CRYPT;
+	unsigned short visibility_flags = Chat::CV_LOCAL | Chat::CV_GLOBAL | Chat::CV_CRYPT;
 	BitmapRef default_theme; // system graphic for the default theme
 	BitmapRef current_theme; // system graphic for the current theme
 
@@ -1052,7 +1052,7 @@ bool initialized = false;
 int update_counter = 0;
 int counter_chatbox = 0;
 
-VisibilityType chat_visibility = Messages::CV_LOCAL;
+VisibilityType chat_visibility = Chat::CV_LOCAL;
 bool cheat_flag = false;
 
 bool debugtext_downloading_flag = false;
@@ -1076,20 +1076,20 @@ void AddNotificationLogEntry(ChatText t, VisibilityType v, std::string sys_name)
 
 // => Default
 void PrintD(std::string message, bool notify_add = false) {
-	AddLogEntry(ChatText{{message, tcfg.color_print_message}}, Messages::CV_LOCAL, "");
+	AddLogEntry(ChatText{{message, tcfg.color_print_message}}, Chat::CV_LOCAL, "");
 	if (notify_add)
-		AddNotificationLogEntry(ChatText{{message, tcfg.color_print_message}}, Messages::CV_LOCAL, "");
+		AddNotificationLogEntry(ChatText{{message, tcfg.color_print_message}}, Chat::CV_LOCAL, "");
 }
 
 // => Label ...
 void PrintL(std::string label, std::string message = "", bool notify_add = false) {
 	AddLogEntry(ChatText{
 		{label, tcfg.color_print_label}, {message, tcfg.color_print_label_message}
-	}, Messages::CV_LOCAL, "");
+	}, Chat::CV_LOCAL, "");
 	if (notify_add) {
 		AddNotificationLogEntry(ChatText{
 			{label, tcfg.color_print_label}, {message, tcfg.color_print_label_message}
-		}, Messages::CV_LOCAL, "");
+		}, Chat::CV_LOCAL, "");
 	}
 }
 
@@ -1099,8 +1099,8 @@ void PrintC(std::string message, bool notify_add = false) {
 }
 
 bool SetChatVisibility(std::string visibility_name) {
-	auto it = Messages::VisibilityValues.find(visibility_name);
-	if (it != Messages::VisibilityValues.end()) {
+	auto it = Chat::VisibilityValues.find(visibility_name);
+	if (it != Chat::VisibilityValues.end()) {
 		chat_visibility = it->second;
 		return true;
 	}
@@ -1108,7 +1108,7 @@ bool SetChatVisibility(std::string visibility_name) {
 }
 
 void SendKeyHash() {
-	if (chat_visibility == Messages::CV_CRYPT) {
+	if (chat_visibility == Chat::CV_CRYPT) {
 		std::string key = GMI().GetConfig().client_chat_crypt_key.Get();
 		std::istringstream key_iss(key);
 		// send a hash integer to help the server to search for clients with the same key
@@ -1379,7 +1379,7 @@ void InputsTyping() {
 					GMI().GetConfig().client_chat_visibility.Set(visibility_name);
 			}
 			PrintC("Visibility: " + \
-				Messages::VisibilityNames.find(chat_visibility)->second);
+				Chat::VisibilityNames.find(chat_visibility)->second);
 			if (visibility_name == "CRYPT") {
 				std::string chat_crypt_password = fnd.next(" ");
 				if (chat_crypt_password != "") {
@@ -1391,11 +1391,11 @@ void InputsTyping() {
 			}
 		// command: !log
 		} else if (command == "!log") {
-			auto it = Messages::VisibilityValues.find(fnd.next(""));
-			if (it != Messages::VisibilityValues.end())
+			auto it = Chat::VisibilityValues.find(fnd.next(""));
+			if (it != Chat::VisibilityValues.end())
 				chat_box->ToggleVisibilityFlag(it->second);
 			std::string flags = "";
-			for (const auto& it : Messages::VisibilityValues)
+			for (const auto& it : Chat::VisibilityValues)
 				if ((chat_box->GetVisibilityFlags() & it.second) > 0)
 					flags += it.first + " ";
 			if (flags.size() > 0)
@@ -1456,7 +1456,7 @@ void InputsTyping() {
 			ShowUsage(fnd);
 		} else {
 			if (text != "") {
-				if (chat_visibility == Messages::CV_CRYPT) {
+				if (chat_visibility == Chat::CV_CRYPT) {
 					std::string key = GMI().GetConfig().client_chat_crypt_key.Get();
 					std::vector<char> cipher_data;
 					CryptoError err = CryptoEncryptText(key, text, cipher_data);
@@ -1559,7 +1559,7 @@ void ChatUi::GotMessage(int visibility, int room_id,
 	}
 	VisibilityType v = static_cast<VisibilityType>(visibility);
 	std::string vtext = "?";
-	if (v == Messages::CV_CRYPT) {
+	if (v == Chat::CV_CRYPT) {
 		std::string decrypted_message;
 		std::string key = GMI().GetConfig().client_chat_crypt_key.Get();
 		std::vector<char> cipher_data(message.begin(), message.end());
@@ -1571,8 +1571,8 @@ void ChatUi::GotMessage(int visibility, int room_id,
 			message = "<unencrypted data>";
 		}
 	}
-	auto it = Messages::VisibilityNames.find(v);
-	if (it != Messages::VisibilityNames.end())
+	auto it = Chat::VisibilityNames.find(v);
+	if (it != Chat::VisibilityNames.end())
 		vtext = it->second;
 	std::time_t t = std::time(nullptr);
 	std::string time = Utils::FormatDate(std::localtime(&t), "%H:%M:%S");

@@ -18,8 +18,10 @@
 
 #include "server.h"
 #include "socket.h"
-#include <thread>
 #include "output_mt.h"
+#include "messages.h"
+#include "connection.h"
+#include <thread>
 
 #ifndef _WIN32
 #  include <csignal>
@@ -34,6 +36,7 @@ static ServerConfig scfg;
 
 using namespace Multiplayer;
 using namespace Messages;
+using namespace Chat;
 
 class ServerConnection : public Connection {
 	std::unique_ptr<Socket> socket;
@@ -393,7 +396,7 @@ class ServerSideClient {
 			connection.Send(bulk);
 		} else {
 			int to_id = 0;
-			if (visibility == Messages::CV_LOCAL) {
+			if (visibility == Chat::CV_LOCAL) {
 				to_id = room_id_hash;
 			}
 			server->SendTo(id, to_id, visibility, bulk);
@@ -514,7 +517,7 @@ void ServerMain::Start(bool wait_thread) {
 			auto& data_to_send = m_data_to_send_queue.front();
 			// stop the thread
 			if (data_to_send->from_id == 0 &&
-					data_to_send->visibility == Messages::CV_NULL) {
+					data_to_send->visibility == Chat::CV_NULL) {
 				m_data_to_send_queue.pop();
 				break;
 			}
@@ -525,9 +528,9 @@ void ServerMain::Start(bool wait_thread) {
 				from_client = from_client_it->second.get();
 			}
 			// send to global, local and crypt
-			if (data_to_send->visibility == Messages::CV_LOCAL ||
-				data_to_send->visibility == Messages::CV_CRYPT ||
-					data_to_send->visibility == Messages::CV_GLOBAL) {
+			if (data_to_send->visibility == Chat::CV_LOCAL ||
+				data_to_send->visibility == Chat::CV_CRYPT ||
+					data_to_send->visibility == Chat::CV_GLOBAL) {
 				// enter on every client
 				for (const auto& it : clients) {
 					auto& to_client = it.second;
@@ -538,15 +541,15 @@ void ServerMain::Start(bool wait_thread) {
 					if (from_client && from_client->GetClientHash() != to_client->GetClientHash()) continue;
 					bool send_alt = data_to_send->return_flag;
 					// send to local
-					if (data_to_send->visibility == Messages::CV_LOCAL &&
+					if (data_to_send->visibility == Chat::CV_LOCAL &&
 							data_to_send->to_id == to_client->GetRoomIdHash()) {
 						to_client->Send(data_to_send->data, send_alt);
 					// send to crypt
-					} else if (data_to_send->visibility == Messages::CV_CRYPT &&
+					} else if (data_to_send->visibility == Chat::CV_CRYPT &&
 							from_client && from_client->GetChatCryptKeyHash() == to_client->GetChatCryptKeyHash()) {
 						to_client->Send(data_to_send->data, send_alt);
 					// send to global
-					} else if (data_to_send->visibility == Messages::CV_GLOBAL) {
+					} else if (data_to_send->visibility == Chat::CV_GLOBAL) {
 						to_client->Send(data_to_send->data, send_alt);
 					}
 				}
@@ -606,7 +609,7 @@ void ServerMain::Stop() {
 		server_listener_2->Stop();
 	server_listener->Stop();
 	// stop sending loop
-	m_data_to_send_queue.emplace(new DataToSend{ 0, 0, Messages::CV_NULL, "" });
+	m_data_to_send_queue.emplace(new DataToSend{ 0, 0, Chat::CV_NULL, "" });
 	m_data_to_send_queue_cv.notify_one();
 	Output::Info("S: Stopped");
 }
