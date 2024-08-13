@@ -32,28 +32,30 @@ DebugTextOverlay::DebugTextOverlay() :
 void DebugTextOverlay::Draw(Bitmap& dst) {
 	if (items.empty() || !bitmap) return;
 
-	bitmap->Clear();
-
 	int y = 0;
 	for (auto& it : items) {
 		auto& item = it.second;
 		if (item.dirty) {
-			if (item.show) {
-				for (const std::string& line : item.lines) {
-					Rect line_rect = Text::GetSize(*Font::DefaultBitmapFont(), line);
-					Rect fillrect(0, y, line_rect.width, line_rect.height);
-					bitmap->FillRect(fillrect, Color(0, 0, 0, 102));
+			for (const std::string& line : item.lines) {
+				Rect text_rect = Text::GetSize(*Font::DefaultBitmapFont(), line);
+				Rect line_rect(0, y, Player::screen_width, text_rect.height);
+				bitmap->ClearRect(line_rect);
+				if (item.show) {
+					line_rect.width = text_rect.width;
+					bitmap->FillRect(line_rect, Color(0, 0, 0, 102));
 					if (color > -1)
 						Text::Draw(*bitmap, 0, y, *Font::Default(), *Cache::SystemOrBlack(), color, line);
 					else
 						Text::Draw(*bitmap, 0, y, *Font::DefaultBitmapFont(), Color(255, 255, 255, 255), line);
-					y += line_rect.height;
 				}
+				y += text_rect.height;
 			}
 
 			item.dirty = false;
 
 			if (item.remove) remove_list.emplace_back(it.first);
+		} else {
+			y += item.rect.height;
 		}
 	}
 

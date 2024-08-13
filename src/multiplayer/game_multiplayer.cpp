@@ -55,7 +55,6 @@
 #include "playerother.h"
 #include "messages.h"
 #include "output_mt.h"
-#include "util/strfnd.h"
 
 #ifndef EMSCRIPTEN
 #  include "server.h"

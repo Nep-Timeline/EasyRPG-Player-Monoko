@@ -223,6 +223,9 @@ function launch(done) {
     Module.api_private.getClipboardText_js = textInputHelper.getClipboardText;
     Module.api_private.setClipboardText_js = textInputHelper.setClipboardText;
 
+    // Requires interaction to take effect
+    window.onbeforeunload = () => 'Please confirm before closing'
+
     done();
   });
 }

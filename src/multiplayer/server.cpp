@@ -137,7 +137,8 @@ class ServerSideClient {
 
 	void SendSelfRoomInfoAsync() {
 		server->ForEachClient([this](const ServerSideClient& client) {
-			if (client.id == id || client.room_id_hash != room_id_hash)
+			if (client.id == id || client.room_id_hash != room_id_hash
+					|| client.client_hash != client_hash)
 				return;
 			SendSelfAsync(JoinPacket(client.id));
 			SendSelfAsync(client.state.move);

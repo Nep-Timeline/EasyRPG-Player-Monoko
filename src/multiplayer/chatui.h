@@ -29,13 +29,13 @@ struct ChatUiTextConfig {
 	uint8_t color_log_name = 0;
 	uint8_t color_log_visibility = 2;
 	uint8_t color_log_room = 1;
-	uint8_t color_log_time = 2;
+	uint8_t color_log_time = 0;
 	uint8_t color_log_message = -1;
 	uint8_t color_log_truncatechar = 1;
 	uint8_t color_typebox = 0;
-	uint8_t color_print_message = 2;
+	uint8_t color_print_message = 0;
 	uint8_t color_print_label = 1;
-	uint8_t color_print_label_message = 2;
+	uint8_t color_print_label_message = 0;
 };
 
 class ChatUi {
