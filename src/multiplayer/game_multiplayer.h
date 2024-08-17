@@ -47,10 +47,12 @@ public:
 
 	enum class DebugTextMode {
 		NONE = 0,
+		DEFAULT = 1,
 		PLAYER_BASIC = 2,
-		PLAYER_FULL = 6,
+		PLAYER_FULL = 6, // 4 | 2
 	};
-	void ToggleDebugTextMode(DebugTextMode mode);
+	std::string GetDebugText(DebugTextMode mode);
+	void ToggleDebugTextOverlayMode(DebugTextMode mode);
 
 	// Config
 	void GameLoaded();

@@ -55,6 +55,7 @@
 #include "playerother.h"
 #include "messages.h"
 #include "output_mt.h"
+#include "util/serialize.h"
 
 #ifndef EMSCRIPTEN
 #  include "server.h"
@@ -72,10 +73,10 @@ namespace {
 	const int picture_limit = 50;
 
 	// Config
-	Game_Multiplayer::DebugTextMode debugtext_mode = Game_Multiplayer::DebugTextMode::NONE;
+	Game_Multiplayer::DebugTextMode dto_mode = Game_Multiplayer::DebugTextMode::NONE; // debugtext overlay
 	std::shared_ptr<int> multiplayer_json_request_id;
 	std::string game_name;
-	std::string client_hash;
+	uint32_t client_hash;
 	Game_ConfigMultiplayer cfg;
 	int update_counter = 0;
 	struct {
@@ -159,19 +160,14 @@ int GetPlayerPictureId(int player_id, int picture_id) {
 void UpdateClientHash() {
 	std::stringstream ss;
 	ss << connection.GetCryptKey() << game_name;
-	uint32_t hash = Utils::CRC32(ss);
-	client_hash = std::string(reinterpret_cast<const char*>(&hash), sizeof(hash));
+	client_hash = Utils::CRC32(ss);
 }
 
-uint32_t GetClientHash() {
-	std::istringstream iss(client_hash);
-	return Utils::CRC32(iss);
-}
-
-uint32_t GetNumHash(int num) {
+int GetNumHash(int num) {
 	if (connection.Encrypted()) {
 		std::stringstream ss;
-		ss << client_hash << std::string_view(reinterpret_cast<const char*>(&num), sizeof(num));
+		WriteU32(ss, client_hash);
+		WriteU32(ss, num);
 		return Utils::CRC32(ss);
 	}
 	return num;
@@ -221,8 +217,8 @@ void Setup() {
 				}
 			}
 		}
-		if (cfg.contains("debugtext") && cfg["debugtext"].is_object()) {
-			const nlohmann::json& obj = cfg["debugtext"];
+		if (cfg.contains("debugtextoverlay") && cfg["debugtextoverlay"].is_object()) {
+			const nlohmann::json& obj = cfg["debugtextoverlay"];
 			if (obj.contains("color") && obj["color"].is_number())
 				Graphics::GetDebugTextOverlay().SetColor(obj["color"].get<int>());
 		}
@@ -247,6 +243,7 @@ void Setup() {
 	};
 	if (Player::game_config.engine != Player::EngineNone) {
 		game_name = Player::game_title; // Try to give a name, but it may not be effective
+		UpdateClientHash();
 
 #ifndef EMSCRIPTEN
 		LoadTextConfig();
@@ -374,14 +371,22 @@ std::string GetDebugText(int mode) {
 	std::string sprite_name = std::move(d.sprite_name);
 	if (sprite_name.empty()) sprite_name = "/";
 	std::ostringstream os;
+	if (mode & 1) {
+		os << "client hash: " << client_hash
+			<< " | game: " << game_name
+			<< " | picture names: " << global_sync_picture_names.size()
+			<< " | picture prefixes: " << global_sync_picture_prefixes.size()
+			<< " | virtual 3d maps: " << virtual_3d_map_configs.size();
+	}
 	if (mode & 2) {
+		if (mode & 1) os << " | ";
 		os << "map id: " << room_id
 			<< " | pos: (" << d.pos_x
 			<< ", " << d.pos_y
 			<< ")";
 	}
 	if (mode & 4) {
-		if (mode & 6) os << " | ";
+		if (mode & 3) os << " | ";
 		os << "facing: " << d.facing
 			<< " | speed: " << d.speed
 			<< " | transparency: " << d.transparency
@@ -481,7 +486,7 @@ void InitConnection() {
 
 	connection.RegisterSystemHandler(SystemMessage::OPEN, [](Connection& _) {
 		SendBasicData();
-		connection.SendPacket(ClientHelloPacket(GetClientHash(), room_id, cfg.client_chat_name.Get()));
+		connection.SendPacket(ClientHelloPacket(client_hash, room_id, cfg.client_chat_name.Get()));
 		CUI().SetStatusConnection(true);
 	});
 	connection.RegisterSystemHandler(SystemMessage::CLOSE, [](Connection& _) {
@@ -808,13 +813,17 @@ Game_Multiplayer::Game_Multiplayer() {
 	InitConnection();
 }
 
-void Game_Multiplayer::ToggleDebugTextMode(DebugTextMode mode) {
-	if (debugtext_mode == DebugTextMode::NONE) {
-		debugtext_mode = mode;
+std::string Game_Multiplayer::GetDebugText(DebugTextMode mode) {
+	return ::GetDebugText(static_cast<int>(mode));
+}
+
+void Game_Multiplayer::ToggleDebugTextOverlayMode(DebugTextMode mode) {
+	if (dto_mode == DebugTextMode::NONE) {
+		dto_mode = mode;
 	} else {
-		debugtext_mode = debugtext_mode == mode ? DebugTextMode::NONE : mode;
+		dto_mode = dto_mode == mode ? DebugTextMode::NONE : mode;
 	}
-	if (debugtext_mode != DebugTextMode::NONE)
+	if (dto_mode != DebugTextMode::NONE)
 		Graphics::GetDebugTextOverlay().ShowItem("00_player_info");
 	else
 		Graphics::GetDebugTextOverlay().RemoveItem("00_player_info");
@@ -1176,8 +1185,8 @@ void Game_Multiplayer::Update() {
 	if (active) {
 		connection.Receive();
 	}
-	if (debugtext_mode != DebugTextMode::NONE) {
-		Graphics::GetDebugTextOverlay().UpdateItem("00_player_info", GetDebugText(static_cast<int>(debugtext_mode)));
+	if (dto_mode != DebugTextMode::NONE) {
+		Graphics::GetDebugTextOverlay().UpdateItem("00_player_info", ::GetDebugText(static_cast<int>(dto_mode)));
 	}
 	OutputMt::Update();
 }

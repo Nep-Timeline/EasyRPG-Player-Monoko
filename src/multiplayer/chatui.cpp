@@ -1055,8 +1055,9 @@ int counter_chatbox = 0;
 VisibilityType chat_visibility = Chat::CV_LOCAL;
 bool cheat_flag = false;
 
-bool debugtext_downloading_flag = false;
-std::string debugtext_downloading_text;
+/** debug text overlay */
+bool dto_downloading_flag = false;
+std::string dto_downloading_text;
 
 void AddLogEntry(ChatText t, VisibilityType v, std::string sys_name) {
 	chat_log.push_back(std::make_unique<ChatEntry>(t, v, sys_name, true));
@@ -1180,8 +1181,10 @@ void ShowUsage(Strfnd& fnd) {
 		PrintD("- toggle the immersive mode");
 		PrintL("<!splitscreen, !ss> ", "[vertically, v]");
 		PrintD("- toggle the split-screen mode");
-		PrintL("<!debugtext, !dt> ", "...");
-		PrintD("- see !help debugtext");
+		PrintL("<!debugtext, !dt> ");
+		PrintD("- print debug text");
+		PrintL("<!debugtextoverlay, !dto> ", "...");
+		PrintD("- see !help debugtextoverlay");
 	} else if (doc_name == "cheat") {
 		PrintL("!cheat");
 		PrintD("- Toggle cheat mode");
@@ -1192,10 +1195,10 @@ void ShowUsage(Strfnd& fnd) {
 		PrintD("- Get/Set switches");
 		PrintL("!debug");
 		PrintD("- Enable TestPlay mode");
-	} else if (doc_name == "debugtext") {
-		PrintL("<!debugtext, !dt> ", "[player, p]");
+	} else if (doc_name == "debugtextoverlay") {
+		PrintL("<..., !dto> ", "[player, p]");
 		PrintD("- Toggle player status");
-		PrintL("<!debugtext, !dt> ", "<downloading, d>");
+		PrintL("<..., !dto> ", "<downloading, d>");
 		PrintD("- Toggle downloading status");
 	} else {
 		PrintD("No entry for " + doc_name);
@@ -1439,18 +1442,21 @@ void InputsTyping() {
 			PrintC("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
 		// command: !debugtext
 		} else if (command == "!debugtext" || command == "!dt") {
+			Output::InfoStr(GMI().GetDebugText(Game_Multiplayer::DebugTextMode::DEFAULT));
+		// command: !debugtextoverlay
+		} else if (command == "!debugtextoverlay" || command == "!dto") {
 			std::string name = fnd.next(" ");
 			if (name == "player" || name == "p") {
-				GMI().ToggleDebugTextMode(Game_Multiplayer::DebugTextMode::PLAYER_FULL);
+				GMI().ToggleDebugTextOverlayMode(Game_Multiplayer::DebugTextMode::PLAYER_FULL);
 			} else if (name == "downloading" || name == "d") {
-				debugtext_downloading_flag = !debugtext_downloading_flag;
-				if (debugtext_downloading_flag)
+				dto_downloading_flag = !dto_downloading_flag;
+				if (dto_downloading_flag)
 					Graphics::GetDebugTextOverlay().ShowItem("99_downloading");
 				else
 					Graphics::GetDebugTextOverlay().HideItem("99_downloading");
-				PrintC(std::string("DebugText: ") + (debugtext_downloading_flag ? "enabled" : "disabled"));
+				PrintC(std::string("DebugTextOverlay: ") + (dto_downloading_flag ? "enabled" : "disabled"));
 			} else
-				GMI().ToggleDebugTextMode(Game_Multiplayer::DebugTextMode::PLAYER_BASIC);
+				GMI().ToggleDebugTextOverlayMode(Game_Multiplayer::DebugTextMode::PLAYER_BASIC);
 		// command: !help
 		} else if (command == "!help") {
 			ShowUsage(fnd);
@@ -1508,8 +1514,8 @@ void Update() {
 
 	if (chat_box == nullptr) return;
 
-	if (debugtext_downloading_flag) {
-		Graphics::GetDebugTextOverlay().UpdateItem("99_downloading", debugtext_downloading_text);
+	if (dto_downloading_flag) {
+		Graphics::GetDebugTextOverlay().UpdateItem("99_downloading", dto_downloading_text);
 	}
 
 	InputsFocusUnfocus();
@@ -1627,7 +1633,7 @@ void ChatUi::SetStatusProgress(unsigned int percent, std::string text) {
 	if (chat_box == nullptr)
 		return;
 	chat_box->SetStatusProgress(percent);
-	debugtext_downloading_text = std::move(text);
+	dto_downloading_text = std::move(text);
 }
 
 bool ChatUi::IsCheating() const {
