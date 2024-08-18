@@ -517,7 +517,7 @@ void InitConnection() {
 		}
 	});
 	connection.RegisterSystemHandler(SystemMessage::TERMINATED, [](Connection& _) {
-		CUI().GotInfo("!! Connection terminated");
+		CUI().GotSystemMessage("!! Connection terminated");
 		// Here only changes state, connection already disconnected
 		GMI().Disconnect();
 	});
@@ -611,7 +611,7 @@ void InitConnection() {
 	});
 	connection.RegisterHandler<ChatPacket>([SetGlobalPlayersSystem](ChatPacket& p) {
 		if (p.type == 0)
-			CUI().GotInfo(p.message);
+			CUI().GotSystemMessage(p.message, p.visibility);
 		else if (p.type == 1) {
 			if (p.sys_name != "")
 				SetGlobalPlayersSystem(p.id, p.sys_name);

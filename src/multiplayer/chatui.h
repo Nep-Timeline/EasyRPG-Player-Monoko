@@ -49,7 +49,7 @@ public:
 
 	void GotMessage(int visibility, int room_id, std::string name,
 			std::string message, std::string sys_name);
-	void GotInfo(std::string msg);
+	void GotSystemMessage(std::string msg, int visibility = 0);
 
 	void SetTextConfig(ChatUiTextConfig tcfg);
 	void SetStatusConnection(bool connected, bool connecting = false);

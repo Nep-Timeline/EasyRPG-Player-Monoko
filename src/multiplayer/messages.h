@@ -162,7 +162,7 @@ namespace Messages {
 		ChatPacket(uint16_t _id, uint8_t _t, uint8_t _v, uint16_t _r, std::string _n, std::string _m) // S2C
 			: PlayerPacket(packet_type, _id), type(_t), visibility(_v),
 			room_id(_r), name(std::move(_n)), message(std::move(_m)) {}
-		uint8_t type{0}; // 0: info, 1: chat
+		uint8_t type{0}; // 0: system, 1: chat
 		uint8_t visibility{0};
 		uint32_t crypt_key_hash{0};
 		uint16_t room_id{0};

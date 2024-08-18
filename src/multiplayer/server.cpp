@@ -181,7 +181,7 @@ class ServerSideClient {
 		connection.RegisterSystemHandler(SystemMessage::CLOSE, [this, Leave](Connection& _) {
 			if (join_sent) {
 				Leave();
-				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"
+				SendGlobalChat(ChatPacket(id, 0, CV_VERBOSE, room_id, "", "*** id:"
 					+ std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " left the server."));
 				if (encrypted)
 					OutputMt::Info("S: id={} (encrypted) left the server", id);
@@ -198,7 +198,7 @@ class ServerSideClient {
 				room_id = p.room_id;
 				state.name.id = id;
 				state.name.name = p.name;
-				SendGlobalChat(ChatPacket(id, 0, CV_GLOBAL, room_id, "", "*** id:"
+				SendGlobalChat(ChatPacket(id, 0, CV_VERBOSE, room_id, "", "*** id:"
 					+ std::to_string(id) + (state.name.name == "" ? "" : " " + state.name.name) + " joined the server."));
 				if (encrypted)
 					OutputMt::Info("S: id={} (encrypted) joined the server", id);
@@ -425,7 +425,7 @@ class ServerSideClient {
 	void FlushQueue() {
 		FlushQueue(m_global_queue, CV_GLOBAL);
 		FlushQueue(m_local_queue, CV_LOCAL);
-		FlushQueue(m_self_queue, CV_NULL, true);
+		FlushQueue(m_self_queue, CV_NONE, true);
 	}
 
 public:
@@ -518,7 +518,7 @@ void ServerMain::Start(bool wait_thread) {
 			auto& data_to_send = m_data_to_send_queue.front();
 			// stop the thread
 			if (data_to_send->from_id == 0 &&
-					data_to_send->visibility == Chat::CV_NULL) {
+					data_to_send->visibility == Chat::CV_NONE) {
 				m_data_to_send_queue.pop();
 				break;
 			}
@@ -610,7 +610,7 @@ void ServerMain::Stop() {
 		server_listener_2->Stop();
 	server_listener->Stop();
 	// stop sending loop
-	m_data_to_send_queue.emplace(new DataToSend{ 0, 0, Chat::CV_NULL, "" });
+	m_data_to_send_queue.emplace(new DataToSend{ 0, 0, Chat::CV_NONE, "" });
 	m_data_to_send_queue_cv.notify_one();
 	Output::Info("S: Stopped");
 }

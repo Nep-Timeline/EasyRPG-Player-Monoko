@@ -321,7 +321,7 @@ void Output::WarningStr(std::string const& warn, bool no_chat) {
 		return;
 	}
 	if (!no_chat && !Player::exit_flag) {
-		CUI().GotInfo("W: " + warn);
+		CUI().GotSystemMessage("W: " + warn);
 	}
 	WriteLog(LogLevel::Warning, warn, Color(255, 255, 0, 255));
 }
@@ -331,7 +331,7 @@ void Output::InfoStr(std::string const& msg, bool no_chat) {
 		return;
 	}
 	if (!no_chat && !Player::exit_flag) {
-		CUI().GotInfo("I: " + msg);
+		CUI().GotSystemMessage("I: " + msg);
 	}
 	WriteLog(LogLevel::Info, msg, Color(255, 255, 255, 255));
 }
