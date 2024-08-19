@@ -1442,12 +1442,12 @@ void InputsTyping() {
 			PrintC("setsw #" + sw_id + " = " + (Main_Data::game_switches->Get(atoi(sw_id.c_str())) ? "on" : "off"));
 		// command: !debugtext
 		} else if (command == "!debugtext" || command == "!dt") {
-			Output::InfoStr(GMI().GetDebugText(Game_Multiplayer::DebugTextMode::DEFAULT));
+			Output::InfoStr(GMI().GetDebugText(Multiplayer::DT_DEFAULT));
 		// command: !debugtextoverlay
 		} else if (command == "!debugtextoverlay" || command == "!dto") {
 			std::string name = fnd.next(" ");
 			if (name == "player" || name == "p") {
-				GMI().ToggleDebugTextOverlayMode(Game_Multiplayer::DebugTextMode::PLAYER_FULL);
+				GMI().ToggleDebugTextOverlayMode(Multiplayer::DT_PLAYER_FULL);
 			} else if (name == "downloading" || name == "d") {
 				dto_downloading_flag = !dto_downloading_flag;
 				if (dto_downloading_flag)
@@ -1456,7 +1456,7 @@ void InputsTyping() {
 					Graphics::GetDebugTextOverlay().HideItem("99_downloading");
 				PrintC(std::string("DebugTextOverlay: ") + (dto_downloading_flag ? "enabled" : "disabled"));
 			} else
-				GMI().ToggleDebugTextOverlayMode(Game_Multiplayer::DebugTextMode::PLAYER_BASIC);
+				GMI().ToggleDebugTextOverlayMode(Multiplayer::DT_PLAYER_A);
 		// command: !help
 		} else if (command == "!help") {
 			ShowUsage(fnd);

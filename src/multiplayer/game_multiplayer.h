@@ -24,6 +24,16 @@
 #include "../game_pictures.h"
 #include <lcf/rpg/sound.h>
 
+namespace Multiplayer {
+
+enum DebugTextMode {
+	DT_NONE = 0,
+	DT_DEFAULT = 1,
+	DT_PLAYER_A = 2,
+	DT_PLAYER_B = 4,
+	DT_PLAYER_FULL = DT_PLAYER_A | DT_PLAYER_B,
+};
+
 class Game_Multiplayer {
 public:
 	static Game_Multiplayer& Instance();
@@ -45,12 +55,6 @@ public:
 		nametag_mode = static_cast<NametagMode>(mode);
 	}
 
-	enum class DebugTextMode {
-		NONE = 0,
-		DEFAULT = 1,
-		PLAYER_BASIC = 2,
-		PLAYER_FULL = 6, // 4 | 2
-	};
 	std::string GetDebugText(DebugTextMode mode);
 	void ToggleDebugTextOverlayMode(DebugTextMode mode);
 
@@ -121,6 +125,10 @@ public:
 private:
 	NametagMode nametag_mode{NametagMode::CLASSIC};
 };
+
+} // end of namespace
+
+using Game_Multiplayer = Multiplayer::Game_Multiplayer;
 
 inline Game_Multiplayer& GMI() { return Game_Multiplayer::Instance(); }
 

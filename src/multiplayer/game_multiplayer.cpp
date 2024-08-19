@@ -63,6 +63,7 @@
 #  include <emscripten/eventloop.h>
 #endif
 
+using namespace Multiplayer;
 using namespace Messages;
 
 namespace {
@@ -73,7 +74,7 @@ namespace {
 	const int picture_limit = 50;
 
 	// Config
-	Game_Multiplayer::DebugTextMode dto_mode = Game_Multiplayer::DebugTextMode::NONE; // debugtext overlay
+	DebugTextMode dto_mode = DT_NONE; // debugtext overlay
 	std::shared_ptr<int> multiplayer_json_request_id;
 	std::string game_name;
 	uint32_t client_hash;
@@ -366,27 +367,27 @@ PlayerData GetPlayerData() {
 	return d;
 }
 
-std::string GetDebugText(int mode) {
+std::string GetDebugText(DebugTextMode mode) {
 	PlayerData d = GetPlayerData();
 	std::string sprite_name = std::move(d.sprite_name);
 	if (sprite_name.empty()) sprite_name = "/";
 	std::ostringstream os;
-	if (mode & 1) {
+	if (mode & DT_DEFAULT) {
 		os << "client hash: " << client_hash
 			<< " | game: " << game_name
 			<< " | picture names: " << global_sync_picture_names.size()
 			<< " | picture prefixes: " << global_sync_picture_prefixes.size()
 			<< " | virtual 3d maps: " << virtual_3d_map_configs.size();
 	}
-	if (mode & 2) {
-		if (mode & 1) os << " | ";
+	if (mode & DT_PLAYER_A) {
+		if (mode & DT_DEFAULT) os << " | ";
 		os << "map id: " << room_id
 			<< " | pos: (" << d.pos_x
 			<< ", " << d.pos_y
 			<< ")";
 	}
-	if (mode & 4) {
-		if (mode & 3) os << " | ";
+	if (mode & DT_PLAYER_B) {
+		if (mode & (DT_DEFAULT | DT_PLAYER_A)) os << " | ";
 		os << "facing: " << d.facing
 			<< " | speed: " << d.speed
 			<< " | transparency: " << d.transparency
@@ -814,16 +815,16 @@ Game_Multiplayer::Game_Multiplayer() {
 }
 
 std::string Game_Multiplayer::GetDebugText(DebugTextMode mode) {
-	return ::GetDebugText(static_cast<int>(mode));
+	return ::GetDebugText(mode);
 }
 
 void Game_Multiplayer::ToggleDebugTextOverlayMode(DebugTextMode mode) {
-	if (dto_mode == DebugTextMode::NONE) {
+	if (dto_mode == DT_NONE) {
 		dto_mode = mode;
 	} else {
-		dto_mode = dto_mode == mode ? DebugTextMode::NONE : mode;
+		dto_mode = dto_mode == mode ? DT_NONE : mode;
 	}
-	if (dto_mode != DebugTextMode::NONE)
+	if (dto_mode != DT_NONE)
 		Graphics::GetDebugTextOverlay().ShowItem("00_player_info");
 	else
 		Graphics::GetDebugTextOverlay().RemoveItem("00_player_info");
@@ -1185,8 +1186,8 @@ void Game_Multiplayer::Update() {
 	if (active) {
 		connection.Receive();
 	}
-	if (dto_mode != DebugTextMode::NONE) {
-		Graphics::GetDebugTextOverlay().UpdateItem("00_player_info", ::GetDebugText(static_cast<int>(dto_mode)));
+	if (dto_mode != DT_NONE) {
+		Graphics::GetDebugTextOverlay().UpdateItem("00_player_info", ::GetDebugText(dto_mode));
 	}
 	OutputMt::Update();
 }
