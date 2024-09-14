@@ -124,7 +124,7 @@ public:
 			conn_label = status ? "Connected" : "Disconnected";
 
 		auto c_rect = Text::GetSize(*Font::Default(), conn_label);
-		conn_status = Bitmap::Create(c_rect.width + 1, c_rect.height + 1, true);
+		conn_status = Bitmap::Create(c_rect.width + 1, c_rect.height + 1);
 		Text::Draw(*conn_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(),
 			tcfg.color_status_connection, conn_label);
 	}
@@ -145,7 +145,7 @@ public:
 		}
 
 		auto r_rect = Text::GetSize(*Font::Default(), room_label);
-		room_status = Bitmap::Create(r_rect.width + 1, r_rect.height + 1, true);
+		room_status = Bitmap::Create(r_rect.width + 1, r_rect.height + 1);
 		Text::Draw(*room_status, 0, 0, *Font::Default(), *Cache::SystemOrBlack(), tcfg.color_status_room, room_label);
 	}
 
@@ -904,8 +904,8 @@ public:
 					if (d_msg.caret_index_head == d_msg.caret_index_tail) {
 						// Exceptions: two cases of edge selections, top-to-bottom selection.
 						// + The next (last / previous or next) line has no selection
-						if ((h == d_msg.caret_char_dims.size() - 1
-							|| h == 0 || message_index_tail < message_index_head) && nh == nt) {
+						if ((h == d_msg.caret_char_dims.size() - 1 || h == 0
+								|| message_index_tail < message_index_head) && nh == nt) {
 							next_selection = true;
 						}
 					}

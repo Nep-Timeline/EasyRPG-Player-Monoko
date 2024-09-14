@@ -53,6 +53,7 @@ void NameTag::Draw(Bitmap& dst) {
 	if (dirty) {
 		auto rect = Text::GetSize(*Font::NameText(), nick_trim);
 		nick_img = Bitmap::Create(rect.width, rect.height);
+		nick_img->SetId(fmt::format("nametag:{},{}", nickname, sys_name));
 
 		Text::Draw(*nick_img, 0, 0, *Font::NameText(), *(sys_graphic ? sys_graphic : Cache::SystemOrBlack()), 0, nick_trim);
 
@@ -112,6 +113,7 @@ void NameTag::SetNickname(StringView name) {
 };
 
 void NameTag::SetSystemGraphic(StringView sys_name) {
+	this->sys_name = ToString(sys_name);
 	sys_graphic = Cache::System(sys_name);
 	dirty = true;
 }

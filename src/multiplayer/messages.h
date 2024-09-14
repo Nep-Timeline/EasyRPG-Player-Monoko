@@ -471,11 +471,25 @@ namespace Messages {
 			int effect_mode = 0;
 			int effect_power = 0;
 			// Extensions
-			int magnify_width = 100;
+			bool flip_x = false;
+			bool flip_y = false;
+			int blend_mode = 0;
+			int origin = 0;
+			int magnify_width = 100; // RPG_RT supports magnify, but not independent for w/h
 			int magnify_height = 100;
 		};
 		struct ShowParams : Params {
 			std::string name;
+			// RPG Maker 2k3 1.12
+			int spritesheet_cols = 1;
+			int spritesheet_rows = 1;
+			int spritesheet_frame = 0;
+			int spritesheet_speed = 0;
+			int map_layer = 7;
+			int battle_layer = 0;
+			// erase_on_map_change | affected_by_flash | affected_by_shake
+			int flags = 1 | 32 | 64;
+			bool spritesheet_play_once = false;
 			bool use_transparent_color = false;
 			bool fixed_to_map = false;
 		};
@@ -524,6 +538,8 @@ namespace Messages {
 				(uint8_t)params.red, (uint8_t)params.green, (uint8_t)params.blue, (uint8_t)params.saturation,
 				(int16_t)params.effect_mode, (int16_t)params.effect_power,
 				// Extensions
+				(uint8_t)params.flip_x, (uint8_t)params.flip_y,
+				(uint8_t)params.blend_mode, (int8_t)params.origin,
 				(int16_t)params.magnify_width, (int16_t)params.magnify_height);
 		}
 		void DeSerialize(std::istream& is) override {
@@ -541,6 +557,8 @@ namespace Messages {
 			p.red = ReadU8(is), p.green = ReadU8(is), p.blue = ReadU8(is), p.saturation = ReadU8(is);
 			p.effect_mode = ReadS16(is), p.effect_power = ReadS16(is);
 			// Extensions
+			p.flip_x = ReadU8(is), p.flip_y = ReadU8(is),
+			p.blend_mode = ReadU8(is), p.origin = ReadS8(is),
 			p.magnify_width = ReadS16(is), p.magnify_height = ReadS16(is);
 		}
 	};
@@ -564,7 +582,13 @@ namespace Messages {
 		void Serialize(std::ostream& os) const override { PicturePacket::Serialize(os); }
 		void Serialize2(std::ostream& os) const override {
 			PicturePacket::Serialize2(os);
-			WritePartial(os, params.name, (uint8_t)params.use_transparent_color, (uint8_t)params.fixed_to_map);
+			WritePartial(os, params.name,
+				(uint8_t)params.spritesheet_cols, (uint8_t)params.spritesheet_rows,
+				(uint8_t)params.spritesheet_frame, (uint8_t)params.spritesheet_speed,
+				(uint8_t)params.spritesheet_play_once,
+				(uint8_t)params.map_layer, (uint8_t)params.battle_layer,
+				(uint8_t)params.flags,
+				(uint8_t)params.use_transparent_color, (uint8_t)params.fixed_to_map);
 		}
 		void DeSerialize(std::istream& is) override { PicturePacket::DeSerialize(is); }
 		void DeSerialize2(std::istream& is) override {
@@ -575,8 +599,12 @@ namespace Messages {
 			Game_Pictures::ShowParams p;
 			PicturePacket::BuildParams(p, is);
 			p.name = DeSerializeString16(is);
-			p.use_transparent_color = (bool)ReadU8(is);
-			p.fixed_to_map = (bool)ReadU8(is);
+			p.spritesheet_cols = ReadU8(is), p.spritesheet_rows = ReadU8(is);
+			p.spritesheet_frame = ReadU8(is), p.spritesheet_speed = ReadU8(is);
+			p.spritesheet_play_once = ReadU8(is);
+			p.map_layer = ReadU8(is), p.battle_layer = ReadU8(is);
+			p.flags = ReadU8(is);
+			p.use_transparent_color = ReadU8(is), p.fixed_to_map = ReadU8(is);
 			return p;
 		}
 	};

@@ -40,6 +40,7 @@ public:
 private:
 	PlayerOther& player;
 
+	std::string sys_name;
 	std::string nickname;
 	std::string nick_trim;
 
