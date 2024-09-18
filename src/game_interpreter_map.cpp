@@ -50,6 +50,7 @@
 #include "scene_load.h"
 #include "scene_name.h"
 #include "scene_shop.h"
+#include "scene_debug.h"
 #include "scene_gameover.h"
 #include "scene.h"
 #include "graphics.h"
@@ -76,6 +77,8 @@ enum InnSubcommand {
 	eOptionInnStay = 0,
 	eOptionInnNoStay = 1,
 };
+
+using namespace Game_Interpreter_Shared;
 
 void Game_Interpreter_Map::SetState(const lcf::rpg::SaveEventExecState& save) {
 	Clear();
@@ -230,8 +233,10 @@ bool Game_Interpreter_Map::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 			return CommandOpenLoadMenu(com);
 		case Cmd::ToggleAtbMode:
 			return CommandToggleAtbMode(com);
-		case static_cast <Game_Interpreter::Cmd>(2002): // Cmd::EasyRpg_TriggerEventAt
+		case Cmd::EasyRpg_TriggerEventAt:
 			return CommandEasyRpgTriggerEventAt(com);
+		case Cmd::EasyRpg_WaitForSingleMovement:
+			return CommandEasyRpgWaitForSingleMovement(com);
 		default:
 			return Game_Interpreter::ExecuteCommand(com);
 	}
@@ -268,12 +273,12 @@ bool Game_Interpreter_Map::CommandRecallToLocation(lcf::rpg::EventCommand const&
 }
 
 bool Game_Interpreter_Map::CommandEnemyEncounter(lcf::rpg::EventCommand const& com) { // code 10710
-	auto& frame = GetFrame();
-	auto& index = frame.current_command;
-
 	if (Game_Message::IsMessageActive()) {
 		return false;
 	}
+
+	auto& frame = GetFrame();
+	auto& index = frame.current_command;
 
 	BattleArgs args;
 
@@ -365,12 +370,12 @@ bool Game_Interpreter_Map::CommandEndBattle(lcf::rpg::EventCommand const& /* com
 }
 
 bool Game_Interpreter_Map::CommandOpenShop(lcf::rpg::EventCommand const& com) { // code 10720
-	auto& frame = GetFrame();
-	auto& index = frame.current_command;
-
 	if (Game_Message::IsMessageActive()) {
 		return false;
 	}
+
+	auto& frame = GetFrame();
+	auto& index = frame.current_command;
 
 	bool allow_buy = false;
 	bool allow_sell = false;
@@ -393,7 +398,7 @@ bool Game_Interpreter_Map::CommandOpenShop(lcf::rpg::EventCommand const& com) { 
 	auto shop_type = com.parameters[1];
 
 	// Not used, but left here for documentation purposes
-	//bool has_shop_handlers = com.parameters[2] != 0;
+	// bool has_shop_handlers = com.parameters[2] != 0;
 
 	std::vector<int> goods;
 	for (auto it = com.parameters.begin() + 4; it < com.parameters.end(); ++it) {
@@ -543,12 +548,12 @@ bool Game_Interpreter_Map::CommandEndInn(lcf::rpg::EventCommand const& /* com */
 }
 
 bool Game_Interpreter_Map::CommandEnterHeroName(lcf::rpg::EventCommand const& com) { // code 10740
-	auto& frame = GetFrame();
-	auto& index = frame.current_command;
-
 	if (Game_Message::IsMessageActive()) {
 		return false;
 	}
+
+	auto& frame = GetFrame();
+	auto& index = frame.current_command;
 
 	auto actor_id = com.parameters[0];
 	auto charset = com.parameters[1];
@@ -719,26 +724,71 @@ bool Game_Interpreter_Map::CommandPlayMovie(lcf::rpg::EventCommand const& com) {
 	return true;
 }
 
-bool Game_Interpreter_Map::CommandOpenSaveMenu(lcf::rpg::EventCommand const& /* com */) { // code 11910
-	auto& frame = GetFrame();
-	auto& index = frame.current_command;
-
+bool Game_Interpreter_Map::CommandOpenSaveMenu(lcf::rpg::EventCommand const& com) { // code 11910
 	if (Game_Message::IsMessageActive()) {
 		return false;
 	}
 
+	auto& frame = GetFrame();
+	auto& index = frame.current_command;
+
 	Scene::instance->SetRequestedScene(std::make_shared<Scene_Save>());
-	++index;
-	return false;
+
+	const int current_system_function = com.parameters[0];
+
+	// Handle save menu (default behavior)
+	if (!Player::IsPatchManiac() || current_system_function <= 0) {
+		Scene::instance->SetRequestedScene(std::make_shared<Scene_Save>());
+		++index;
+		return false;
+	}
+
+	// Command "Call System Functions"
+	switch (current_system_function) {
+	case 1: // Load menu
+		return CommandOpenLoadMenu(com);
+	case 2: // Game menu
+		return CommandOpenMainMenu(com);
+	case 3: // Toggle fullscreen
+		// TODO Implement fullscreen mode once maniacs supports it
+		// const int fullscreen_mode = com.parameters[1]; // Broken in Maniac.
+		return CommandToggleFullscreen(com);
+	case 4: // Settings menu
+		return CommandOpenVideoOptions(com);
+	case 5: // Debug menu
+		// const int pause_while_debugging = com.parameters[1]; // unused in our ingame debug screen.
+		Scene::instance->SetRequestedScene(std::make_shared<Scene_Debug>());
+		++index;
+		return false;
+	case 6: // License information menu
+		// TODO Implement license information menu
+		return true;
+	case 7: // Reset game
+		return CommandReturnToTitleScreen(com);
+	default:
+		if (Player::HasEasyRpgExtensions() && current_system_function >= 200 && current_system_function < 210) {
+			const int actor_index = ValueOrVariable(com.parameters[1], com.parameters[2]);
+			const bool is_db_actor = ValueOrVariable(com.parameters[3], com.parameters[4]);
+
+			if (RequestMainMenuScene(current_system_function - 200, actor_index, is_db_actor)) {
+				++index;
+				return false;
+			}
+		} else {
+			Output::Warning("CommandOpenSaveMenu: Unsupported scene {}", current_system_function);
+		}
+	}
+
+	return true;
 }
 
 bool Game_Interpreter_Map::CommandOpenMainMenu(lcf::rpg::EventCommand const&) { // code 11950
-	auto& frame = GetFrame();
-	auto& index = frame.current_command;
-
 	if (Game_Message::IsMessageActive()) {
 		return false;
 	}
+
+	auto& frame = GetFrame();
+	auto& index = frame.current_command;
 
 	int subscreen_id = -1, actor_index = 0;
 	bool is_db_actor = false;
@@ -755,12 +805,12 @@ bool Game_Interpreter_Map::CommandOpenLoadMenu(lcf::rpg::EventCommand const& /* 
 		return true;
 	}
 
-	auto& frame = GetFrame();
-	auto& index = frame.current_command;
-
 	if (Game_Message::IsMessageActive()) {
 		return false;
 	}
+
+	auto& frame = GetFrame();
+	auto& index = frame.current_command;
 
 	Scene::instance->SetRequestedScene(std::make_shared<Scene_Load>());
 	++index;
@@ -785,6 +835,65 @@ bool Game_Interpreter_Map::CommandEasyRpgTriggerEventAt(lcf::rpg::EventCommand c
 	int y = ValueOrVariable(com.parameters[2], com.parameters[3]);
 
 	Main_Data::game_player->TriggerEventAt(x, y);
+
+	return true;
+}
+
+bool Game_Interpreter_Map::CommandEasyRpgWaitForSingleMovement(lcf::rpg::EventCommand const& com) {
+	if (!Player::HasEasyRpgExtensions()) {
+		return true;
+	}
+
+	_state.easyrpg_parameters.resize(3);
+
+	auto& event_id = _state.easyrpg_parameters[0];
+	auto& failure_limit = _state.easyrpg_parameters[1];
+	auto& output_var = _state.easyrpg_parameters[2];
+
+	if (!_state.easyrpg_active) {
+		event_id = ValueOrVariable(com.parameters[0], com.parameters[1]);
+
+		if (com.parameters.size() >= 4) {
+			failure_limit = ValueOrVariable(com.parameters[2], com.parameters[3]);
+		}
+
+		if (com.parameters.size() >= 6) {
+			output_var = ValueOrVariable(com.parameters[4], com.parameters[5]);
+		}
+	}
+
+	_state.easyrpg_active = false;
+
+	Game_Character* chara = GetCharacter(event_id);
+	if (chara == nullptr) {
+		return true;
+	}
+
+	bool exists = chara->IsMoveRouteOverwritten();
+	bool finished = chara->IsMoveRouteFinished();
+
+	if (!exists || (exists && finished)) {
+		if (output_var > 0) {
+			// Move route inexistant or ended: Report success (1)
+			Main_Data::game_variables->Set(output_var, 1);
+			Game_Map::SetNeedRefresh(true);
+		}
+		return true;
+	}
+
+	// !finished
+	if (failure_limit == 0 || chara->GetMoveFailureCount() < failure_limit) {
+		// Below threshold: Yield
+		_state.easyrpg_active = true;
+		return false;
+	}
+
+	// Cancel move route and report abort (0)
+	chara->CancelMoveRoute();
+	if (output_var > 0) {
+		Main_Data::game_variables->Set(output_var, 0);
+		Game_Map::SetNeedRefresh(true);
+	}
 
 	return true;
 }

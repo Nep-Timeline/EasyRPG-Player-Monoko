@@ -41,7 +41,8 @@ namespace {
 }
 
 void Game_ConfigPlayer::Hide() {
-#ifndef HAVE_FREETYPE
+#if !defined(HAVE_FREETYPE) || defined(__ANDROID__)
+	// FIXME (Android): URI encoded SAF paths are not supported
 	font1.SetOptionVisible(false);
 	font1_size.SetOptionVisible(false);
 	font2.SetOptionVisible(false);
@@ -83,9 +84,15 @@ void Game_ConfigInput::Hide() {
 Game_Config Game_Config::Create(CmdlineParser& cp) {
 	Game_Config cfg;
 
+	// Set platform specific defaults
 #if USE_SDL >= 2
 	cfg.video.scaling_mode.Set(ConfigEnum::ScalingMode::Bilinear);
 #endif
+
+#if defined(__WIIU__)
+	cfg.input.gamepad_swap_ab_and_xy.Set(true);
+#endif
+
 
 	cp.Rewind();
 
@@ -93,6 +100,9 @@ Game_Config Game_Config::Create(CmdlineParser& cp) {
 	std::string config_file;
 	if (!config_path.empty()) {
 		config_file = FileFinder::MakePath(config_path, config_name);
+	}
+	else if (FileFinder::Root().Exists(config_name)) {
+		config_file = ToString(config_name);
 	}
 
 	auto cli_config = FileFinder::Root().OpenOrCreateInputStream(config_file);
@@ -123,7 +133,7 @@ FilesystemView Game_Config::GetGlobalConfigFilesystem() {
 #ifdef __wii__
 		path = "/data/easyrpg-player";
 #elif defined(__WIIU__)
-		path = "/vol/external01/data/easyrpg-player"; // temp
+		path = "fs:/vol/external01/wiiu/data/easyrpg-player";
 #elif defined(__SWITCH__)
 		path = "/switch/easyrpg-player";
 #elif defined(__3DS__)

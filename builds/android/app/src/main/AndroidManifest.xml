@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="org.easyrpg.player"
     android:versionCode="1"
     android:versionName="1.0"
     android:installLocation="auto">
@@ -99,6 +98,11 @@
         <activity
             android:name=".settings.SettingsInputActivity"
             android:label="@string/input"
+            android:parentActivityName=".settings.SettingsMainActivity">
+        </activity>
+        <activity
+            android:name=".settings.SettingsFontActivity"
+            android:label="@string/font"
             android:parentActivityName=".settings.SettingsMainActivity">
         </activity>
         <activity
