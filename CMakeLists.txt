@@ -365,10 +365,6 @@ add_library(${PROJECT_NAME} OBJECT
 	src/std_clock.h
 	src/string_view.cpp
 	src/string_view.h
-	src/statustext_overlay.cpp
-	src/statustext_overlay.h
-	src/debugtext_overlay.cpp
-	src/debugtext_overlay.h
 	src/system.h
 	src/teleport_target.h
 	src/text.cpp
@@ -485,6 +481,10 @@ add_library(${PROJECT_NAME} OBJECT
 #	src/platform/psp/psp_input_buttons.cpp
 
 target_sources(${PROJECT_NAME} PRIVATE
+	src/statustext_overlay.cpp
+	src/statustext_overlay.h
+	src/debugtext_overlay.cpp
+	src/debugtext_overlay.h
 	src/multiplayer/connection.cpp
 	src/multiplayer/connection.h
 	src/multiplayer/client_connection.cpp
@@ -942,15 +942,16 @@ endif()
 if(BUILD_CLIENT) # BUILD_CLIENT
 
 if(PLAYER_MULTIPLAYER)
+	set(LIBSODIUM_CMAKE_GIT "https://github.com/robinlinden/libsodium-cmake" CACHE STRING "")
+	set(LIBSODIUM_CMAKE_BRANCH "master" CACHE STRING "")
 	set(LIBSODIUM_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/downloads/libsodium-cmake")
 	set(LIBSODIUM_SOURCES "${LIBSODIUM_CMAKE_PATH}/libsodium")
 	if(NOT EXISTS ${LIBSODIUM_CMAKE_PATH})
 		find_package(Git REQUIRED)
-		# Source: https://github.com/robinlinden/libsodium-cmake
 		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
 			"-c" "advice.detachedHead=false" "--branch"
-			"2022"
-			"https://github.com/monokotech/libsodium-cmake"
+			"${LIBSODIUM_CMAKE_BRANCH}"
+			"${LIBSODIUM_CMAKE_GIT}"
 			"${LIBSODIUM_CMAKE_PATH}")
 		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
 			"-c" "advice.detachedHead=false" "--branch"
@@ -1251,10 +1252,6 @@ if(${PLAYER_BUILD_EXECUTABLE} AND ${PLAYER_TARGET_PLATFORM} MATCHES "^SDL[12]$" 
 		target_sources(${EXE_NAME} PRIVATE
 			resources/windows/player.manifest
 			"${CMAKE_CURRENT_BINARY_DIR}/resources/windows/player.rc")
-		if(MSVC)
-			target_link_options(${EXE_NAME} PUBLIC /DEBUG:FULL)
-			message(STATUS "x64dbg: Add x64dbg source file viewing support")
-		endif()
 
 		# Set Visual Studio startup project
 		set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${EXE_NAME})

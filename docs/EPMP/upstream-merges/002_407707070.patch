@@ -1,0 +1,516 @@
+diff --git a/resources/emscripten/emscripten-shell.html b/resources/emscripten/emscripten-shell.html
+index 7ef1619a4..d63b678a4 100644
+--- a/resources/emscripten/emscripten-shell.html
++++ b/resources/emscripten/emscripten-shell.html
+@@ -205,7 +205,6 @@ let easyrpgPlayer;
+ let lastTouchedId;
+ 
+ // Launch the Player and configure it
+-<<<<<<< HEAD
+ function launch(done) {
+   createEasyRpgPlayer({
+     game: undefined,
+@@ -214,17 +213,7 @@ function launch(done) {
+     // Module is ready
+     easyrpgPlayer = Module;
+     easyrpgPlayer.initApi();
+-=======
+-window.addEventListener('load', (event) => {
+-    createEasyRpgPlayer({
+-      game: undefined,
+-      saveFs: undefined
+-    }).then(function(Module) {
+-      // Module is ready
+-      easyrpgPlayer = Module;
+-      easyrpgPlayer.initApi();
+-      canvas.focus();
+->>>>>>> 407707070
++    focusPlayer();
+ 
+     // Custom code here
+     const textInputHelper = TextInputHelper(Module);
+@@ -234,7 +223,6 @@ window.addEventListener('load', (event) => {
+     Module.api_private.getClipboardText_js = textInputHelper.getClipboardText;
+     Module.api_private.setClipboardText_js = textInputHelper.setClipboardText;
+ 
+-<<<<<<< HEAD
+     done();
+   });
+ }
+@@ -257,11 +245,6 @@ function focusPlayer(element) {
+ }
+ canvas.addEventListener('mouseenter', () => focusPlayer());
+ canvas.addEventListener('click', () => focusPlayer());
+-=======
+-// Make EasyRPG player embeddable
+-canvas.addEventListener('mouseenter', () => canvas.focus());
+-canvas.addEventListener('click', () => canvas.focus());
+->>>>>>> 407707070
+ 
+ // Handle clicking on the fullscreen button
+ document.querySelector('#controls-fullscreen').addEventListener('click', () => {
+diff --git a/src/audio.cpp b/src/audio.cpp
+index ab0879c5f..5d42939c4 100644
+--- a/src/audio.cpp
++++ b/src/audio.cpp
+@@ -92,6 +92,22 @@ Game_ConfigAudio AudioInterface::GetConfig() const {
+ 	return acfg;
+ }
+ 
++void AudioInterface::ToggleMute() {
++	toggle_mute_flag = !toggle_mute_flag;
++	if (toggle_mute_flag) {
++		volume_se = SE_GetGlobalVolume();
++		volume_bgm = BGM_GetGlobalVolume();
++		SE_SetGlobalVolume(0);
++		BGM_SetGlobalVolume(0);
++	} else {
++		SE_SetGlobalVolume(volume_se);
++		BGM_SetGlobalVolume(volume_bgm);
++	}
++	Graphics::GetStatusTextOverlay().ShowText(
++		toggle_mute_flag ? "Muted" : "Unmuted"
++	);
++}
++
+ int AudioInterface::BGM_GetGlobalVolume() const {
+ 	return cfg.music_volume.Get();
+ }
+@@ -108,22 +124,6 @@ void AudioInterface::SE_SetGlobalVolume(int volume) {
+ 	cfg.sound_volume.Set(volume);
+ }
+ 
+-<<<<<<< HEAD
+-void AudioInterface::ToggleMute() {
+-	toggle_mute_flag = !toggle_mute_flag;
+-	if (toggle_mute_flag) {
+-		volume_se = SE_GetGlobalVolume();
+-		volume_bgm = BGM_GetGlobalVolume();
+-		SE_SetGlobalVolume(0);
+-		BGM_SetGlobalVolume(0);
+-	} else {
+-		SE_SetGlobalVolume(volume_se);
+-		BGM_SetGlobalVolume(volume_bgm);
+-	}
+-	Graphics::GetStatusTextOverlay().ShowText(
+-		toggle_mute_flag ? "Muted" : "Unmuted"
+-	);
+-=======
+ bool AudioInterface::GetFluidsynthEnabled() const {
+ 	return cfg.fluidsynth_midi.Get();
+ }
+@@ -155,5 +155,4 @@ std::string AudioInterface::GetFluidsynthSoundfont() const {
+ void AudioInterface::SetFluidsynthSoundfont(StringView sf) {
+ 	cfg.soundfont.Set(ToString(sf));
+ 	MidiDecoder::ChangeFluidsynthSoundfont(sf);
+->>>>>>> 407707070
+ }
+diff --git a/src/audio.h b/src/audio.h
+index fd8a051ad..66ffff1d7 100644
+--- a/src/audio.h
++++ b/src/audio.h
+@@ -137,15 +137,14 @@ struct AudioInterface {
+ 	 */
+ 	virtual void SE_Stop() = 0;
+ 
++	void ToggleMute();
++
+ 	int BGM_GetGlobalVolume() const;
+ 	void BGM_SetGlobalVolume(int volume);
+ 
+ 	int SE_GetGlobalVolume() const;
+ 	void SE_SetGlobalVolume(int volume);
+ 
+-<<<<<<< HEAD
+-	void ToggleMute();
+-=======
+ 	bool GetFluidsynthEnabled() const;
+ 	void SetFluidsynthEnabled(bool enable);
+ 
+@@ -157,7 +156,6 @@ struct AudioInterface {
+ 
+ 	std::string GetFluidsynthSoundfont() const;
+ 	void SetFluidsynthSoundfont(StringView sf);
+->>>>>>> 407707070
+ 
+ protected:
+ 	Game_ConfigAudio cfg;
+diff --git a/src/font.cpp b/src/font.cpp
+index ff06ac576..203e87198 100644
+--- a/src/font.cpp
++++ b/src/font.cpp
+@@ -712,13 +712,10 @@ void Font::ResetNameText() {
+ }
+ 
+ void Font::Dispose() {
+-<<<<<<< HEAD
+-	ResetDefault();
+-	ResetNameText();
+-=======
+ 	SetDefault(nullptr, true);
+ 	SetDefault(nullptr, false);
+->>>>>>> 407707070
++
++	ResetNameText();
+ 
+ #ifdef HAVE_FREETYPE
+ 	if (library) {
+diff --git a/src/game_config.cpp b/src/game_config.cpp
+index 38dd76c54..dba278f8b 100644
+--- a/src/game_config.cpp
++++ b/src/game_config.cpp
+@@ -281,6 +281,28 @@ void Game_Config::LoadFromArgs(CmdlineParser& cp) {
+ 		long li_value = 0;
+ 		std::string str_value;
+ 
++		if (cp.ParseNext(arg, 1, "--bind-address")) {
++			std::string svalue;
++			if (arg.ParseValue(0, svalue)) {
++				multiplayer.server_bind_address.Set(std::move(svalue));
++			}
++			continue;
++		}
++		if (cp.ParseNext(arg, 1, "--bind-address-2")) {
++			std::string svalue;
++			if (arg.ParseValue(0, svalue)) {
++				multiplayer.server_bind_address_2.Set(std::move(svalue));
++			}
++			continue;
++		}
++		if (cp.ParseNext(arg, 0, "--no-heartbeats")) {
++			multiplayer.no_heartbeats.Set(true);
++			continue;
++		}
++		if (cp.ParseNext(arg, 0, "--no-pause-when-focus-lost")) {
++			video.no_pause_when_focus_lost.Set(true);
++			continue;
++		}
+ 		if (cp.ParseNext(arg, 0, {"--vsync", "--no-vsync"})) {
+ 			video.vsync.Set(arg.ArgIsOn());
+ 			continue;
+@@ -371,28 +393,6 @@ void Game_Config::LoadFromArgs(CmdlineParser& cp) {
+ 			}
+ 			continue;
+ 		}
+-<<<<<<< HEAD
+-		if (cp.ParseNext(arg, 1, "--bind-address")) {
+-			std::string svalue;
+-			if (arg.ParseValue(0, svalue)) {
+-				multiplayer.server_bind_address.Set(std::move(svalue));
+-			}
+-			continue;
+-		}
+-		if (cp.ParseNext(arg, 1, "--bind-address-2")) {
+-			std::string svalue;
+-			if (arg.ParseValue(0, svalue)) {
+-				multiplayer.server_bind_address_2.Set(std::move(svalue));
+-			}
+-			continue;
+-		}
+-		if (cp.ParseNext(arg, 0, "--no-heartbeats")) {
+-			multiplayer.no_heartbeats.Set(true);
+-			continue;
+-		}
+-		if (cp.ParseNext(arg, 0, "--no-pause-when-focus-lost")) {
+-			video.no_pause_when_focus_lost.Set(true);
+-=======
+ 		if (cp.ParseNext(arg, 1, "--soundfont")) {
+ 			if (arg.NumValues() > 0) {
+ 				audio.soundfont.Set(arg.Value(0));
+@@ -433,7 +433,6 @@ void Game_Config::LoadFromArgs(CmdlineParser& cp) {
+ 			if (arg.NumValues() > 0) {
+ 				font_path = FileFinder::MakeCanonical(arg.Value(0), 0);
+ 			}
+->>>>>>> 407707070
+ 			continue;
+ 		}
+ 
+@@ -449,6 +448,23 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
+ 		return;
+ 	}
+ 
++	/** MULTIPLAYER SECTION */
++	multiplayer.server_auto_start.FromIni(ini);
++	multiplayer.server_bind_address.FromIni(ini);
++	multiplayer.server_bind_address_2.FromIni(ini);
++	multiplayer.server_max_users.FromIni(ini);
++	multiplayer.client_auto_connect.FromIni(ini);
++	multiplayer.client_remote_address.FromIni(ini);
++	multiplayer.client_socks5_address.FromIni(ini);
++	multiplayer.client_crypt_key.FromIni(ini);
++	multiplayer.client_chat_notifications.FromIni(ini);
++	multiplayer.client_chat_immersive_mode.FromIni(ini);
++	multiplayer.client_chat_splitscreen_mode.FromIni(ini);
++	multiplayer.client_chat_visibility.FromIni(ini);
++	multiplayer.client_chat_name.FromIni(ini);
++	multiplayer.client_chat_crypt_key.FromIni(ini);
++	multiplayer.client_name_tag_mode.FromIni(ini);
++
+ 	/** VIDEO SECTION */
+ 	video.vsync.FromIni(ini);
+ 	video.fullscreen.FromIni(ini);
+@@ -530,30 +546,10 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
+ 	player.settings_in_title.FromIni(ini);
+ 	player.settings_in_menu.FromIni(ini);
+ 	player.show_startup_logos.FromIni(ini);
+-<<<<<<< HEAD
+-
+-	/** MULTIPLAYER SECTION */
+-	multiplayer.server_auto_start.FromIni(ini);
+-	multiplayer.server_bind_address.FromIni(ini);
+-	multiplayer.server_bind_address_2.FromIni(ini);
+-	multiplayer.server_max_users.FromIni(ini);
+-	multiplayer.client_auto_connect.FromIni(ini);
+-	multiplayer.client_remote_address.FromIni(ini);
+-	multiplayer.client_socks5_address.FromIni(ini);
+-	multiplayer.client_crypt_key.FromIni(ini);
+-	multiplayer.client_chat_notifications.FromIni(ini);
+-	multiplayer.client_chat_immersive_mode.FromIni(ini);
+-	multiplayer.client_chat_splitscreen_mode.FromIni(ini);
+-	multiplayer.client_chat_visibility.FromIni(ini);
+-	multiplayer.client_chat_name.FromIni(ini);
+-	multiplayer.client_chat_crypt_key.FromIni(ini);
+-	multiplayer.client_name_tag_mode.FromIni(ini);
+-=======
+ 	player.font1.FromIni(ini);
+ 	player.font1_size.FromIni(ini);
+ 	player.font2.FromIni(ini);
+ 	player.font2_size.FromIni(ini);
+->>>>>>> 407707070
+ }
+ 
+ void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
+diff --git a/src/game_interpreter.cpp b/src/game_interpreter.cpp
+index bfcd31cdd..e4256ad76 100644
+--- a/src/game_interpreter.cpp
++++ b/src/game_interpreter.cpp
+@@ -1086,15 +1086,6 @@ bool Game_Interpreter::CommandControlSwitches(lcf::rpg::EventCommand const& com)
+ 			}
+ 			Game_Map::SetNeedRefresh(true);
+ 		}
+-<<<<<<< HEAD
+-
+-		for (int i = start; i <= end; ++i) {
+-			GMI().SwitchSet(i, Main_Data::game_switches->GetInt(i));
+-		}
+-
+-		Game_Map::SetNeedRefresh(true);
+-=======
+->>>>>>> 407707070
+ 	}
+ 
+ 	return true;
+@@ -1516,15 +1507,6 @@ bool Game_Interpreter::CommandControlVariables(lcf::rpg::EventCommand const& com
+ 			}
+ 			Game_Map::SetNeedRefresh(true);
+ 		}
+-<<<<<<< HEAD
+-
+-		for (int i = start; i <= end; ++i) {
+-			GMI().VariableSet(i, Main_Data::game_variables->Get(i));
+-		}
+-
+-		Game_Map::SetNeedRefresh(true);
+-=======
+->>>>>>> 407707070
+ 	}
+ 
+ 	return true;
+@@ -2316,16 +2298,7 @@ bool Game_Interpreter::CommandMemorizeLocation(lcf::rpg::EventCommand const& com
+ 	Main_Data::game_variables->Set(var_map_id, Game_Map::GetMapId());
+ 	Main_Data::game_variables->Set(var_x, player->GetX());
+ 	Main_Data::game_variables->Set(var_y, player->GetY());
+-<<<<<<< HEAD
+-
+-	GMI().VariableSet(var_map_id, Game_Map::GetMapId());
+-	GMI().VariableSet(var_x, player->GetX());
+-	GMI().VariableSet(var_y, player->GetY());
+-
+-	Game_Map::SetNeedRefresh(true);
+-=======
+ 	Game_Map::SetNeedRefreshForVarChange({var_map_id, var_x, var_y});
+->>>>>>> 407707070
+ 	return true;
+ }
+ 
+@@ -2436,14 +2409,9 @@ bool Game_Interpreter::CommandStoreTerrainID(lcf::rpg::EventCommand const& com)
+ 	int x = ValueOrVariable(com.parameters[0], com.parameters[1]);
+ 	int y = ValueOrVariable(com.parameters[0], com.parameters[2]);
+ 	int var_id = com.parameters[3];
+-<<<<<<< HEAD
+ 	Main_Data::game_variables->Set(var_id,
+ 		GMI().GetTerrainTag(Game_Map::GetTerrainTag(x, y), x, y));
+-	Game_Map::SetNeedRefresh(true);
+-=======
+-	Main_Data::game_variables->Set(var_id, Game_Map::GetTerrainTag(x, y));
+ 	Game_Map::SetNeedRefreshForVarChange(var_id);
+->>>>>>> 407707070
+ 	return true;
+ }
+ 
+diff --git a/src/options.h b/src/options.h
+index ebb0a3604..fc05038da 100644
+--- a/src/options.h
++++ b/src/options.h
+@@ -52,21 +52,6 @@
+ /** Targeted screen bits per pixel. */
+ #define SCREEN_TARGET_BPP 32
+ 
+-<<<<<<< HEAD
+-/**
+- * Pause the game process when the player window
+- * looses its focus.
+- */
+-#define PAUSE_GAME_WHEN_FOCUS_LOST 1
+-
+-/**
+- * Pause the audio process when the player window
+- * looses its focus.
+- */
+-#define PAUSE_AUDIO_WHEN_FOCUS_LOST 0
+-
+-=======
+->>>>>>> 407707070
+ /** INI configuration filename. */
+ #define INI_NAME "RPG_RT.ini"
+ #define EASYRPG_INI_NAME "EasyRPG.ini"
+diff --git a/src/platform/sdl/sdl2_ui.cpp b/src/platform/sdl/sdl2_ui.cpp
+index 4af462279..6a7ac49b4 100644
+--- a/src/platform/sdl/sdl2_ui.cpp
++++ b/src/platform/sdl/sdl2_ui.cpp
+@@ -157,12 +157,7 @@ Sdl2Ui::Sdl2Ui(long width, long height, const Game_Config& cfg) : BaseUi(cfg)
+ #endif
+ #ifdef EMSCRIPTEN
+ 	SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0");
+-<<<<<<< HEAD
+-	// Prevent blocking the default behavior of events on the child element
+-	//  sdl code: if (!keyElement) keyElement = EMSCRIPTEN_EVENT_TARGET_|>WINDOW<|
+-=======
+ 	// Only handle keyboard events when the canvas has focus
+->>>>>>> 407707070
+ 	SDL_SetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas");
+ #endif
+ #ifdef __WIIU__
+@@ -840,20 +835,15 @@ void Sdl2Ui::ProcessEvent(SDL_Event &evnt) {
+ 
+ void Sdl2Ui::ProcessWindowEvent(SDL_Event &evnt) {
+ 	int state = evnt.window.event;
+-<<<<<<< HEAD
+-#if PAUSE_GAME_WHEN_FOCUS_LOST
++
+ 	if (state == SDL_WINDOWEVENT_FOCUS_LOST
+ 			&& !Player::IsMultiplayerActive()
+ 			&& !vcfg.no_pause_when_focus_lost.Get()) {
+-=======
+-
+-	if (state == SDL_WINDOWEVENT_FOCUS_LOST) {
+ 		auto cfg = vcfg;
+ 		vGetConfig(cfg);
+ 		if (!cfg.pause_when_focus_lost.Get()) {
+ 			return;
+ 		}
+->>>>>>> 407707070
+ 
+ 		Player::Pause();
+ 
+@@ -1375,17 +1365,9 @@ void Sdl2Ui::vGetConfig(Game_ConfigVideo& cfg) const {
+ #ifdef EMSCRIPTEN
+ 	// Fullscreen is handled by the browser
+ 	cfg.fullscreen.SetOptionVisible(false);
+-<<<<<<< HEAD
+-	cfg.fps_render_window.SetOptionVisible(false);
+ 	cfg.window_zoom.SetOptionVisible(false);
+-=======
+-	cfg.fps_limit.SetOptionVisible(false);
+-	cfg.window_zoom.SetOptionVisible(false);
+-	// Toggling this freezes the web player
+-	cfg.vsync.SetOptionVisible(false);
+ 	cfg.pause_when_focus_lost.Lock(false);
+ 	cfg.pause_when_focus_lost.SetOptionVisible(false);
+->>>>>>> 407707070
+ #elif defined(__WIIU__)
+ 	// FIXME: Some options below may crash, better disable for now
+ 	cfg.fullscreen.SetOptionVisible(false);
+diff --git a/src/player.cpp b/src/player.cpp
+index 48ca75d1a..46ef8a19c 100644
+--- a/src/player.cpp
++++ b/src/player.cpp
+@@ -34,6 +34,9 @@
+ #  include <emscripten.h>
+ #endif
+ 
++#include "statustext_overlay.h"
++#include "multiplayer/chatui.h"
++
+ #include "async_handler.h"
+ #include "audio.h"
+ #include "cache.h"
+@@ -85,12 +88,7 @@
+ #include "baseui.h"
+ #include "game_clock.h"
+ #include "message_overlay.h"
+-<<<<<<< HEAD
+-#include "statustext_overlay.h"
+-#include "multiplayer/chatui.h"
+-=======
+ #include "audio_midi.h"
+->>>>>>> 407707070
+ 
+ #ifdef __ANDROID__
+ #include "platform/android/android.h"
+diff --git a/src/player.h b/src/player.h
+index 3ead9ff5e..62ff74f1d 100644
+--- a/src/player.h
++++ b/src/player.h
+@@ -196,6 +196,11 @@ namespace Player {
+ 	 */
+ 	std::string GetEncoding();
+ 
++	/**
++	 * @return True when multiplayer is active
++	 */
++	bool IsMultiplayerActive();
++
+ 	/** @return If engine is any version of RPG2k */
+ 	bool IsRPG2k();
+ 
+@@ -293,15 +298,9 @@ namespace Player {
+ 	bool IsPatchKeyPatch();
+ 
+ 	/**
+-<<<<<<< HEAD
+-	 * @return True when multiplayer is active
+-	 */
+-	bool IsMultiplayerActive();
+-=======
+ 	 * @return True when EasyRpg extensions are on
+ 	 */
+ 	bool HasEasyRpgExtensions();
+->>>>>>> 407707070
+ 
+ 	/**
+ 	 * @return Running engine version. 2000 for RPG2k and 2003 for RPG2k3
+diff --git a/src/scene_debug.cpp b/src/scene_debug.cpp
+index 07cabf628..ffb3c56f4 100644
+--- a/src/scene_debug.cpp
++++ b/src/scene_debug.cpp
+@@ -16,6 +16,7 @@
+  */
+ 
+ // Headers
++#include "multiplayer/chatui.h"
+ #include <vector>
+ #include <sstream>
+ #include <cmath>
+@@ -45,11 +46,7 @@
+ #include <lcf/data.h>
+ #include "output.h"
+ #include "transition.h"
+-<<<<<<< HEAD
+-#include "multiplayer/chatui.h"
+-=======
+ #include "lcf/reader_util.h"
+->>>>>>> 407707070
+ 
+ namespace {
+ struct IndexSet {

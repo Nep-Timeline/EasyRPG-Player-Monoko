@@ -1,4 +1,4 @@
-Read me: [EPMP-README.md](/docs/EPMP-README.md)
+Read me: [EPMP-README.md](/docs/EPMP/README.md)
 
 
 # EasyRPG Player

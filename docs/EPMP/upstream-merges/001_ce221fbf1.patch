@@ -1,0 +1,210 @@
+diff --git a/.github/workflows/stable-compilation.yml b/.github/workflows/stable-compilation.yml
+index 5ef90ab58..dace64183 100644
+--- a/.github/workflows/stable-compilation.yml
++++ b/.github/workflows/stable-compilation.yml
+@@ -28,19 +28,12 @@ jobs:
+       fail-fast: false
+       matrix:
+         image:
+-<<<<<<< HEAD
+-          #- debian:10     # oldstable | CMake 3.13.4 | G++ 8.3.0  | SDL 2.0.9
+-          #- ubuntu:20.04  # LTS       | CMake 3.16.3 | G++ 9.3.0  | SDL 2.0.10
+-          #- debian:11     # stable    | CMake 3.18.4 | G++ 10.2.1 | SDL 2.0.14
+-          - ubuntu:22.04  # LTS       | CMake 3.22.1 | G++ 11.2.0 | SDL 2.0.20
+-=======
+           #   version of: # CMake  | g++    | SDL    |     support end  #
+           # -------------------------------------------------------------
+           - ubuntu:20.04  # 3.16.3 |  9.3.0 | 2.0.10 | LTS       (4/25) #
+           - debian:11     # 3.18.4 | 10.2.1 | 2.0.14 | oldstable (8/24) #
+           - ubuntu:22.04  # 3.22.1 | 11.2.0 | 2.0.20 | LTS       (6/27) #
+           - debian:12     # 3.25.1 | 12.2.0 | 2.26.5 | stable    (6/26) #
+->>>>>>> ce221fbf1
+ 
+     steps:
+       - name: Install dependencies
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3c2a998f9..80253b5d4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -22,7 +22,6 @@ set(CMAKE_CXX_EXTENSIONS ON)
+ # Must be at global scope, otherwise breaks -DPLAYER_BUILD_LIBLCF (see CMP0077)
+ option(BUILD_SHARED_LIBS "Build shared easyrpg_libretro core" ON)
+ 
+-<<<<<<< HEAD
+ option(BUILD_CLIENT "Build client" ON)
+ option(BUILD_SERVER "Build server" OFF)
+ 
+@@ -30,12 +29,7 @@ if(NOT BUILD_CLIENT AND NOT BUILD_SERVER)
+ 	set(BUILD_CLIENT on)
+ endif()
+ 
+-if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.15.0")
+-	option(CMAKE_FIND_PACKAGE_PREFER_CONFIG "Prefer config files over bundled FindXXX files. Set this to OFF when configuration fails and report a bug." ON)
+-endif()
+-=======
+ option(CMAKE_FIND_PACKAGE_PREFER_CONFIG "Prefer config files over bundled FindXXX files. Set this to OFF when configuration fails and report a bug." ON)
+->>>>>>> ce221fbf1
+ 
+ # Source Files
+ add_library(${PROJECT_NAME} OBJECT
+diff --git a/builds/android/app/src/main/java/org/libsdl/app/SDLActivity.java b/builds/android/app/src/main/java/org/libsdl/app/SDLActivity.java
+index 3da32bfeb..b0e59e9cd 100644
+--- a/builds/android/app/src/main/java/org/libsdl/app/SDLActivity.java
++++ b/builds/android/app/src/main/java/org/libsdl/app/SDLActivity.java
+@@ -1372,29 +1372,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
+             }
+         }
+ 
+-<<<<<<< HEAD
+-        if ((source & InputDevice.SOURCE_KEYBOARD) == InputDevice.SOURCE_KEYBOARD) {
+-            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+-                if (isTextInputEvent(event)) {
+-                    if (ic != null) {
+-                        ic.commitText(String.valueOf((char) event.getUnicodeChar()), 1);
+-                    } else {
+-                        SDLInputConnection.nativeCommitText(String.valueOf((char) event.getUnicodeChar()), 1);
+-                    }
+-                }
+-                lastKeyCode = keyCode;
+-                onNativeKeyDown(keyCode);
+-                return true;
+-            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+-                // the ACTION_UP Event of DummyEdit doesn't work correctly,
+-                // so keyUpDelayHandler must be used instaed
+-                keyUpDelayHandler.postDelayed(handleKeyUp, 100);
+-                return true;
+-            }
+-        }
+-
+-=======
+->>>>>>> ce221fbf1
+         if ((source & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE) {
+             // on some devices key events are sent for mouse BUTTON_BACK/FORWARD presses
+             // they are ignored here because sending them as mouse input to SDL is messy
+@@ -1417,10 +1394,13 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
+                     SDLInputConnection.nativeCommitText(String.valueOf((char) event.getUnicodeChar()), 1);
+                 }
+             }
++            lastKeyCode = keyCode;
+             onNativeKeyDown(keyCode);
+             return true;
+         } else if (event.getAction() == KeyEvent.ACTION_UP) {
+-            onNativeKeyUp(keyCode);
++            // the ACTION_UP Event of DummyEdit doesn't work correctly,
++            // so keyUpDelayHandler must be used instaed
++            keyUpDelayHandler.postDelayed(handleKeyUp, 100);
+             return true;
+         }
+ 
+diff --git a/src/game_config.cpp b/src/game_config.cpp
+index e5136c44f..86492362c 100644
+--- a/src/game_config.cpp
++++ b/src/game_config.cpp
+@@ -444,7 +444,7 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
+ 	player.settings_autosave.FromIni(ini);
+ 	player.settings_in_title.FromIni(ini);
+ 	player.settings_in_menu.FromIni(ini);
+-<<<<<<< HEAD
++	player.show_startup_logos.FromIni(ini);
+ 
+ 	/** MULTIPLAYER SECTION */
+ 	multiplayer.server_auto_start.FromIni(ini);
+@@ -461,9 +461,6 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
+ 	multiplayer.client_chat_name.FromIni(ini);
+ 	multiplayer.client_chat_crypt_key.FromIni(ini);
+ 	multiplayer.client_name_tag_mode.FromIni(ini);
+-=======
+-	player.show_startup_logos.FromIni(ini);
+->>>>>>> ce221fbf1
+ }
+ 
+ void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
+diff --git a/src/input_buttons.h b/src/input_buttons.h
+index da0c392df..5208015a7 100644
+--- a/src/input_buttons.h
++++ b/src/input_buttons.h
+@@ -240,14 +240,9 @@ namespace Input {
+ 			case TAKE_SCREENSHOT:
+ 			case SHOW_LOG:
+ 			case TOGGLE_ZOOM:
+-<<<<<<< HEAD
+ 			case TOGGLE_MUTE:
+-			case FAST_FORWARD:
+-			case FAST_FORWARD_PLUS:
+-=======
+ 			case FAST_FORWARD_A:
+ 			case FAST_FORWARD_B:
+->>>>>>> ce221fbf1
+ 				return true;
+ 			default:
+ 				return false;
+diff --git a/src/output.cpp b/src/output.cpp
+index 604349bc3..fa268bf33 100644
+--- a/src/output.cpp
++++ b/src/output.cpp
+@@ -188,19 +188,12 @@ static void WriteLog(LogLevel lvl, std::string const& msg, Color const& c = Colo
+ 	}
+ #endif
+ 
+-<<<<<<< HEAD
+-	if (Player::debug_flag) {
+-		if (lvl != LogLevel::Debug && lvl != LogLevel::Error) {
+-			Graphics::GetMessageOverlay().AddMessage(msg, c);
+-		}
+-=======
+ 	// output to custom logger or terminal
+ 	log_cb(lvl, msg, log_cb_udata);
+ 
+ 	// output to overlay
+-	if (lvl != LogLevel::Debug && lvl != LogLevel::Error) {
++	if (Player::debug_flag && lvl != LogLevel::Debug && lvl != LogLevel::Error) {
+ 		Graphics::GetMessageOverlay().AddMessage(msg, c);
+->>>>>>> ce221fbf1
+ 	}
+ }
+ 
+diff --git a/src/platform/sdl/sdl2_ui.h b/src/platform/sdl/sdl2_ui.h
+index 15360cc6e..c10b2e0da 100644
+--- a/src/platform/sdl/sdl2_ui.h
++++ b/src/platform/sdl/sdl2_ui.h
+@@ -131,6 +131,9 @@ private:
+ 	/** Last display mode. */
+ 	DisplayMode last_display_mode;
+ 
++	int old_focused_fps_limit = -1;
++	bool old_frame_rate_synchronized = false;
++
+ 	/** Main SDL window. */
+ 	SDL_Texture* sdl_texture_game = nullptr;
+ 	SDL_Texture* sdl_texture_scaled = nullptr;
+@@ -151,13 +154,7 @@ private:
+ 
+ #ifdef SUPPORT_AUDIO
+ 	std::unique_ptr<AudioInterface> audio_;
+-<<<<<<< HEAD
+-
+-	int old_focused_fps_limit = -1;
+-	bool old_frame_rate_synchronized = false;
+-=======
+ #endif
+->>>>>>> ce221fbf1
+ };
+ 
+ #endif
+diff --git a/src/window_settings.cpp b/src/window_settings.cpp
+index 6a9a6fb40..0126bd6e6 100644
+--- a/src/window_settings.cpp
++++ b/src/window_settings.cpp
+@@ -407,12 +407,8 @@ void Window_Settings::RefreshButtonList() {
+ 			break;
+ 		case 1:
+ 			buttons = {Input::SETTINGS_MENU, Input::TOGGLE_FPS, Input::TOGGLE_FULLSCREEN, Input::TOGGLE_ZOOM,
+-<<<<<<< HEAD
+ 				Input::TOGGLE_MUTE, Input::TOGGLE_NOTIFICATIONS, Input::TOGGLE_CHAT,
+-				Input::TAKE_SCREENSHOT, Input::RESET, Input::FAST_FORWARD, Input::FAST_FORWARD_PLUS,
+-=======
+ 				Input::TAKE_SCREENSHOT, Input::RESET, Input::FAST_FORWARD_A, Input::FAST_FORWARD_B,
+->>>>>>> ce221fbf1
+ 				Input::PAGE_UP, Input::PAGE_DOWN };
+ 			break;
+ 		case 2:

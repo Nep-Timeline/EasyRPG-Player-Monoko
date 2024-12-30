@@ -343,8 +343,6 @@ namespace Input {
 
 	bool IsWaitingInput();
 	void WaitInput(bool val);
-
-	bool IsKeyNotShared(InputButton button);
 }
 
 #endif

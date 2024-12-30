@@ -1,6 +1,6 @@
 # Settings (See .../settings/secrets/actions)
 # +- secrets: APK_KEY_ALIAS, APK_KEY_PASSWORD, APK_STORE_FILE_B64
-# +- variables: TOOLCHAIN_RELEASE_NAME, MACOS_TOOLCHAIN_OLDPATH
+# +- variables: GIT_USER_URL, TOOLCHAIN_RELEASE_NAME, MACOS_TOOLCHAIN_OLDPATH
 
 name: Cross-platform Compilation
 
@@ -39,7 +39,7 @@ jobs:
           - ubuntu:22.04
 
     env:
-      FILENAME: "EPMP-Server-${{ github.ref_name }}-${{ matrix.image }}"
+      FILENAME: "Player-Server-${{ github.ref_name }}-${{ matrix.image }}"
 
     steps:
       - name: Install dependencies
@@ -78,12 +78,12 @@ jobs:
           cmake --build build --target install
 
       - name: Create Archive
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip usr
 
       - name: Create Github Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.zip"
@@ -105,7 +105,7 @@ jobs:
             triplet: x64-windows-static
 
     env:
-      FILENAME: "EPMP-${{ github.ref_name }}-Windows-${{ matrix.arch }}"
+      FILENAME: "Player-${{ github.ref_name }}-Windows-${{ matrix.arch }}"
 
     steps:
       - name: Setup Developer Command Prompt
@@ -128,7 +128,7 @@ jobs:
       - name: Setup Toolchain
         run: |
           aria2c -o tmp.zip \
-            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/vcpkg-export.zip"
+            "${{ vars.GIT_USER_URL }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/vcpkg-export.zip"
           7z x tmp.zip && mv -v vcpkg-export* vcpkg
 
       - name: Compile
@@ -139,19 +139,19 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=.\vcpkg\scripts\buildsystems\vcpkg.cmake ^
             -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
             -DPLAYER_BUILD_LIBLCF=on ^
-            -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" ^
+            -DPLAYER_BUILD_LIBLCF_GIT="${{ vars.GIT_USER_URL }}/EasyRPG-liblcf" ^
             -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" ^
             -DPLAYER_MULTIPLAYER=on -DPLAYER_VERSION_APPEND=${{ env.PLAYER_VERSION_APPEND }}
           :: https://stackoverflow.com/questions/19024259/how-to-change-the-build-type-to-release-mode-in-cmake/20423820#20423820
           cmake --build build --config RelWithDebInfo
 
       - name: Create Archive
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip build/RelWithDebInfo
 
       - name: Create Github Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.zip"
@@ -170,7 +170,7 @@ jobs:
           - arm64-v8a
 
     env:
-      FILENAME: "EPMP-${{ github.ref_name }}-Android-${{ matrix.abi }}"
+      FILENAME: "Player-${{ github.ref_name }}-Android-${{ matrix.abi }}"
 
     steps:
       - name: Setup JDK
@@ -195,7 +195,7 @@ jobs:
       - name: Setup Toolchain
         run: |
           aria2c -o tmp.tar.gz \
-            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/android_toolchain.tar.gz"
+            "${{ vars.GIT_USER_URL }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/android_toolchain.tar.gz"
           mkdir -p toolchain && tar xf tmp.tar.gz -C toolchain
 
       - name: Decode Base64 Keystore
@@ -215,7 +215,7 @@ jobs:
         run: |
           VER="(GithubActions/`date +%Y-%m-%d`)"
           cmake_opts="-DPLAYER_MULTIPLAYER=on -DCMAKE_BUILD_TYPE=Release -DPLAYER_BUILD_LIBLCF=on"" "
-          cmake_opts+="-DPLAYER_BUILD_LIBLCF_GIT='https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf'"" "
+          cmake_opts+="-DPLAYER_BUILD_LIBLCF_GIT='${{ vars.GIT_USER_URL }}/EasyRPG-liblcf'"" "
           cmake_opts+="-DPLAYER_BUILD_LIBLCF_BRANCH='player-${{ env.TAG_BRANCH }}'"" "
           cmake_opts+="-DPLAYER_VERSION_APPEND='$VER'"
           cd builds/android
@@ -226,7 +226,7 @@ jobs:
             ${{ github.workspace }}/${{ env.FILENAME }}.apk
 
       - name: Create Github Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.apk"
@@ -245,7 +245,7 @@ jobs:
           - arm64
 
     env:
-      FILENAME: "EPMP-${{ github.ref_name }}-macOS-${{ matrix.arch }}"
+      FILENAME: "Player-${{ github.ref_name }}-macOS-${{ matrix.arch }}"
 
     steps:
       - name: Clone Repository
@@ -265,7 +265,7 @@ jobs:
       - name: Setup Toolchain
         run: |
           aria2c -o tmp.tar.gz \
-            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/macos_toolchain.tar.gz"
+            "${{ vars.GIT_USER_URL }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/macos_toolchain.tar.gz"
           mkdir -p toolchain && tar xf tmp.tar.gz -C toolchain
           # fix: Imported target ... includes non-existent path
           # grep: -I is to exclude binary files
@@ -285,19 +285,19 @@ jobs:
           -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}" \
           -DCMAKE_BUILD_TYPE=RelWithDebInfo \
           -DPLAYER_BUILD_LIBLCF=on \
-          -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
+          -DPLAYER_BUILD_LIBLCF_GIT="${{ vars.GIT_USER_URL }}/EasyRPG-liblcf" \
           -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
           -DPLAYER_MULTIPLAYER=on \
           -DPLAYER_VERSION_APPEND="$VER"
           cmake --build build
 
       - name: Create Archive
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip "build/EasyRPG Player.app"
 
       - name: Create Github Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.zip"
@@ -309,7 +309,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      FILENAME: "EPMP-${{ github.ref_name }}-WebPlayer"
+      FILENAME: "Player-${{ github.ref_name }}-WebPlayer"
 
     steps:
       - name: Clone Repository
@@ -337,7 +337,7 @@ jobs:
         run: |
           mkdir emscripten_toolchain && cd emscripten_toolchain
           aria2c -o tmp.tar.gz \
-            "https://github.com/${{ github.repository_owner }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/emscripten_toolchain.tar.gz"
+            "${{ vars.GIT_USER_URL }}/EasyRPG-buildscripts/releases/download/${{ vars.TOOLCHAIN_RELEASE_NAME }}/emscripten_toolchain.tar.gz"
           tar xf tmp.tar.gz
           mkdir bin
 
@@ -353,22 +353,22 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DPLAYER_JS_BUILD_SHELL=ON \
           -DPLAYER_JS_OUTPUT_NAME=index \
-          -DPLAYER_JS_GAME_URL=/play/games/ \
+          -DPLAYER_JS_GAME_URL=./play/games/ \
           -DPLAYER_MULTIPLAYER=on \
           -DPLAYER_BUILD_LIBLCF=on \
-          -DPLAYER_BUILD_LIBLCF_GIT="https://github.com/${{ github.repository_owner }}/EasyRPG-liblcf" \
+          -DPLAYER_BUILD_LIBLCF_GIT="${{ vars.GIT_USER_URL }}/EasyRPG-liblcf" \
           -DPLAYER_BUILD_LIBLCF_BRANCH="player-${{ env.TAG_BRANCH }}" \
           -DPLAYER_VERSION_APPEND="$VER" \
           -DPLAYER_WITH_FLUIDSYNTH=OFF
           cmake --build build
 
       - name: Create Archive
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         run: |
           7z a -mx9 ${{ env.FILENAME }}.zip "build/index."*
 
       - name: Create Github Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/rel')
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.zip"
