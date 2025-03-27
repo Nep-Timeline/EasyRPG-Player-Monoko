@@ -1,6 +1,5 @@
 Read me: [EPMP-README.md](/docs/EPMP/README.md)
 
-
 # EasyRPG Player
 
 EasyRPG Player is a game interpreter to play RPG Maker 2000, 2003 and EasyRPG
